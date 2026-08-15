@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classicSeed, formulaSeed, herbSeed, sourceSeed } from "./catalogSeed";
+import { classicSeed, formulaPassageSeed, formulaSeed, herbSeed, shangHanPassageSeed, sourceSeed } from "./catalogSeed";
 
 const expectedFormulaSources: Record<string, string> = {
   "《伤寒论》": "https://zh.wikisource.org/wiki/%E5%82%B7%E5%AF%92%E8%AB%96",
@@ -43,6 +43,14 @@ describe("source-backed starter catalog", () => {
       expect(record, `${name} 应在经方目录中`).toBeDefined();
       expect(record?.[3]).toMatch(/伤寒论|金匮要略/);
       expect(record?.[7]).toBeTruthy();
+    }
+  });
+
+  it("keeps expanded Shang Han Lun passages and formula mappings traceable", () => {
+    expect(shangHanPassageSeed.length).toBeGreaterThanOrEqual(10);
+    expect(shangHanPassageSeed.every((passage) => passage[6].includes("zh.wikisource.org"))).toBe(true);
+    for (const formulaSlug of ["ma-huang-tang", "xiao-chai-hu-tang", "ban-xia-xie-xin-tang", "si-ni-tang"]) {
+      expect(formulaPassageSeed.some((mapping) => mapping[0] === formulaSlug), `${formulaSlug} 应关联具体条文`).toBe(true);
     }
   });
 });

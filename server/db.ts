@@ -1,19 +1,26 @@
-import { and, desc, eq, like, or } from "drizzle-orm";
+import { and, desc, eq, isNull, like, or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
+  aiStudyConversations,
+  aiStudyMessages,
+  classicPassages,
   classicChapters,
   classics,
   contentSources,
+  learningGoals,
+  formulaPassageMappings,
   formulas,
   herbs,
   InsertUser,
   learningPathProgress,
   readingProgress,
+  reviewReminderEvents,
+  reviewReminders,
   savedItems,
   studyNotes,
   users,
 } from "../drizzle/schema";
-import { chapterSeed, classicSeed, formulaSeed, herbSeed, sourceSeed } from "./catalogSeed";
+import { chapterSeed, classicSeed, formulaPassageSeed, formulaSeed, herbSeed, shangHanPassageSeed, sourceSeed } from "./catalogSeed";
 import { ENV } from "./_core/env";
 
 export type ResourceType = "herb" | "formula" | "classic" | "chapter";
@@ -91,6 +98,23 @@ async function seedCatalog() {
     return classicId ? [{ classicId, sequence, title, excerpt, sourceUrl }] : [];
   });
   if (chapterRows.length) await db.insert(classicChapters).values(chapterRows).onDuplicateKeyUpdate({ set: { updatedAt: new Date() } });
+  const allChapters = await db.select().from(classicChapters);
+  const shangHanId = classicIds.get("shang-han-lun");
+  const shangHanChapterIds = new Map(allChapters.filter((chapter) => chapter.classicId === shangHanId).map((chapter) => [chapter.title, chapter.id]));
+  const passageRows = shangHanPassageSeed.flatMap(([chapterTitle, passageNumber, title, excerpt, keywords, sourceReference, sourceUrl]) => {
+    const chapterId = shangHanChapterIds.get(chapterTitle);
+    return shangHanId && chapterId ? [{ classicId: shangHanId, chapterId, passageNumber, title, excerpt, keywords, sourceReference, sourceUrl }] : [];
+  });
+  if (passageRows.length) await db.insert(classicPassages).values(passageRows).onDuplicateKeyUpdate({ set: { updatedAt: new Date() } });
+  const [allPassages, allFormulas] = await Promise.all([db.select().from(classicPassages), db.select().from(formulas)]);
+  const formulaIds = new Map(allFormulas.map((formula) => [formula.slug, formula.id]));
+  const passageIds = new Map(allPassages.map((passage) => [`${passage.chapterId}:${passage.passageNumber}`, passage.id]));
+  const mappingRows = formulaPassageSeed.flatMap(([formulaSlug, chapterTitle, passageNumber, relationType, studyNote]) => {
+    const formulaId = formulaIds.get(formulaSlug); const chapterId = shangHanChapterIds.get(chapterTitle);
+    const passageId = chapterId ? passageIds.get(`${chapterId}:${passageNumber}`) : undefined;
+    return formulaId && passageId ? [{ formulaId, passageId, relationType, studyNote }] : [];
+  });
+  if (mappingRows.length) await db.insert(formulaPassageMappings).values(mappingRows).onDuplicateKeyUpdate({ set: { updatedAt: new Date() } });
 }
 
 function includesQuery(query: string, columns: Parameters<typeof or>[0][]) {
@@ -156,6 +180,54 @@ export async function getClassicChapters(classicId: number) {
   const db = await getDb();
   if (!db) return [];
   return db.select().from(classicChapters).where(eq(classicChapters.classicId, classicId)).orderBy(classicChapters.sequence);
+}
+
+export async function getClassicPassages(chapterId: number) {
+  await ensureCatalogSeed();
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(classicPassages).where(eq(classicPassages.chapterId, chapterId)).orderBy(classicPassages.passageNumber);
+}
+
+export async function getFormulaPassages(formulaId: number) {
+  await ensureCatalogSeed();
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({
+    relationType: formulaPassageMappings.relationType,
+    studyNote: formulaPassageMappings.studyNote,
+    id: classicPassages.id,
+    chapterId: classicPassages.chapterId,
+    passageNumber: classicPassages.passageNumber,
+    title: classicPassages.title,
+    excerpt: classicPassages.excerpt,
+    keywords: classicPassages.keywords,
+    sourceReference: classicPassages.sourceReference,
+    sourceUrl: classicPassages.sourceUrl,
+    chapterTitle: classicChapters.title,
+  }).from(formulaPassageMappings)
+    .innerJoin(classicPassages, eq(formulaPassageMappings.passageId, classicPassages.id))
+    .innerJoin(classicChapters, eq(classicPassages.chapterId, classicChapters.id))
+    .where(eq(formulaPassageMappings.formulaId, formulaId))
+    .orderBy(formulaPassageMappings.relationType, classicPassages.passageNumber);
+}
+
+export async function getPassageFormulas(passageId: number) {
+  await ensureCatalogSeed();
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({
+    relationType: formulaPassageMappings.relationType,
+    studyNote: formulaPassageMappings.studyNote,
+    id: formulas.id,
+    slug: formulas.slug,
+    name: formulas.name,
+    sourceTitle: formulas.sourceTitle,
+    sourceExcerpt: formulas.sourceExcerpt,
+  }).from(formulaPassageMappings)
+    .innerJoin(formulas, eq(formulaPassageMappings.formulaId, formulas.id))
+    .where(eq(formulaPassageMappings.passageId, passageId))
+    .orderBy(formulaPassageMappings.relationType, formulas.name);
 }
 
 export async function getLocalSearch(query: string) {
@@ -260,6 +332,170 @@ export async function toggleLearningPathStep(userId: number, input: { pathSlug: 
 
 function parseCompletedSteps(value: string | null | undefined) {
   try { const parsed = JSON.parse(value ?? "[]"); return Array.isArray(parsed) ? parsed.filter((item): item is number => Number.isInteger(item)) : []; } catch { return []; }
+}
+
+export type GoalMetric = "path_steps" | "reading_entries" | "study_notes";
+
+export async function getGoalMetricCount(userId: number, metric: GoalMetric) {
+  const db = await getDb();
+  if (!db) return 0;
+  if (metric === "path_steps") {
+    const rows = await db.select({ completedSteps: learningPathProgress.completedSteps }).from(learningPathProgress).where(eq(learningPathProgress.userId, userId));
+    return rows.reduce((total, row) => total + parseCompletedSteps(row.completedSteps).length, 0);
+  }
+  if (metric === "reading_entries") {
+    const rows = await db.select({ id: readingProgress.id }).from(readingProgress).where(eq(readingProgress.userId, userId));
+    return rows.length;
+  }
+  const rows = await db.select({ id: studyNotes.id }).from(studyNotes).where(eq(studyNotes.userId, userId));
+  return rows.length;
+}
+
+export async function listLearningGoals(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const goals = await db.select().from(learningGoals).where(eq(learningGoals.userId, userId)).orderBy(desc(learningGoals.updatedAt));
+  const counts = new Map<GoalMetric, number>();
+  await Promise.all((["path_steps", "reading_entries", "study_notes"] as GoalMetric[]).map(async (metric) => counts.set(metric, await getGoalMetricCount(userId, metric))));
+  return goals.map((goal) => {
+    const currentCount = counts.get(goal.metric) ?? 0;
+    return { ...goal, currentCount, completed: currentCount >= goal.targetCount };
+  });
+}
+
+export async function createLearningGoal(userId: number, input: { title: string; metric: GoalMetric; targetCount: number; deadlineAt?: Date | null }) {
+  const db = await getDb(); if (!db) throw new Error("数据库暂不可用");
+  const result = await db.insert(learningGoals).values({ userId, ...input, deadlineAt: input.deadlineAt ?? null });
+  return { id: Number(result[0].insertId) };
+}
+
+export async function archiveLearningGoal(userId: number, id: number) {
+  const db = await getDb(); if (!db) throw new Error("数据库暂不可用");
+  await db.update(learningGoals).set({ status: "archived" }).where(and(eq(learningGoals.id, id), eq(learningGoals.userId, userId)));
+  return { success: true };
+}
+
+export async function updateLearningGoal(userId: number, id: number, input: { title: string; metric: GoalMetric; targetCount: number; deadlineAt?: Date | null }) {
+  const db = await getDb(); if (!db) throw new Error("数据库暂不可用");
+  await db.update(learningGoals).set({ title: input.title, metric: input.metric, targetCount: input.targetCount, deadlineAt: input.deadlineAt ?? null, status: "active" }).where(and(eq(learningGoals.id, id), eq(learningGoals.userId, userId)));
+  return { success: true };
+}
+
+function calculateNextReviewAt(intervalDays: number, hourUtc: number, from = new Date()) {
+  const next = new Date(from);
+  next.setUTCSeconds(0, 0);
+  next.setUTCHours(hourUtc);
+  if (next <= from) next.setUTCDate(next.getUTCDate() + intervalDays);
+  return next;
+}
+
+export async function createReviewReminder(userId: number, input: { goalId?: number | null; title: string; intervalDays: number; hourUtc: number }) {
+  const db = await getDb(); if (!db) throw new Error("数据库暂不可用");
+  if (input.goalId) {
+    const goal = await db.select({ id: learningGoals.id }).from(learningGoals).where(and(eq(learningGoals.id, input.goalId), eq(learningGoals.userId, userId))).limit(1);
+    if (!goal[0]) throw new Error("所选学习目标不存在或无权访问");
+  }
+  const result = await db.insert(reviewReminders).values({ userId, goalId: input.goalId ?? null, title: input.title, intervalDays: input.intervalDays, hourUtc: input.hourUtc, nextReviewAt: calculateNextReviewAt(input.intervalDays, input.hourUtc) });
+  return { id: Number(result[0].insertId) };
+}
+
+export async function attachReviewReminderSchedule(userId: number, reminderId: number, taskUid: string) {
+  const db = await getDb(); if (!db) throw new Error("数据库暂不可用");
+  await db.update(reviewReminders).set({ scheduleCronTaskUid: taskUid }).where(and(eq(reviewReminders.id, reminderId), eq(reviewReminders.userId, userId)));
+}
+
+export async function getReviewReminder(userId: number, id: number) {
+  const db = await getDb(); if (!db) return undefined;
+  const rows = await db.select().from(reviewReminders).where(and(eq(reviewReminders.id, id), eq(reviewReminders.userId, userId))).limit(1);
+  return rows[0];
+}
+
+export async function listReviewReminders(userId: number) {
+  const db = await getDb(); if (!db) return { reminders: [], pending: [] };
+  const [reminders, pending] = await Promise.all([
+    db.select({ id: reviewReminders.id, userId: reviewReminders.userId, goalId: reviewReminders.goalId, title: reviewReminders.title, intervalDays: reviewReminders.intervalDays, hourUtc: reviewReminders.hourUtc, enabled: reviewReminders.enabled, scheduleCronTaskUid: reviewReminders.scheduleCronTaskUid, nextReviewAt: reviewReminders.nextReviewAt, lastTriggeredAt: reviewReminders.lastTriggeredAt, createdAt: reviewReminders.createdAt, updatedAt: reviewReminders.updatedAt, goalTitle: learningGoals.title }).from(reviewReminders).leftJoin(learningGoals, eq(reviewReminders.goalId, learningGoals.id)).where(eq(reviewReminders.userId, userId)).orderBy(desc(reviewReminders.updatedAt)),
+    db.select({ id: reviewReminderEvents.id, reminderId: reviewReminderEvents.reminderId, dueAt: reviewReminderEvents.dueAt, title: reviewReminders.title, goalTitle: learningGoals.title }).from(reviewReminderEvents).innerJoin(reviewReminders, eq(reviewReminderEvents.reminderId, reviewReminders.id)).leftJoin(learningGoals, eq(reviewReminders.goalId, learningGoals.id)).where(and(eq(reviewReminderEvents.userId, userId), isNull(reviewReminderEvents.seenAt))).orderBy(desc(reviewReminderEvents.dueAt)),
+  ]);
+  return { reminders, pending };
+}
+
+export async function updateReviewReminder(userId: number, id: number, input: { title: string; intervalDays: number; hourUtc: number; enabled: boolean }) {
+  const db = await getDb(); if (!db) throw new Error("数据库暂不可用");
+  const existing = await getReviewReminder(userId, id); if (!existing) throw new Error("复习提醒不存在或无权访问");
+  const nextReviewAt = input.enabled ? calculateNextReviewAt(input.intervalDays, input.hourUtc) : existing.nextReviewAt;
+  await db.update(reviewReminders).set({ title: input.title, intervalDays: input.intervalDays, hourUtc: input.hourUtc, enabled: input.enabled ? 1 : 0, nextReviewAt }).where(eq(reviewReminders.id, id));
+  return { ...existing, ...input, enabled: input.enabled ? 1 : 0, nextReviewAt };
+}
+
+export async function deleteReviewReminder(userId: number, id: number) {
+  const db = await getDb(); if (!db) throw new Error("数据库暂不可用");
+  await db.delete(reviewReminderEvents).where(and(eq(reviewReminderEvents.reminderId, id), eq(reviewReminderEvents.userId, userId)));
+  await db.delete(reviewReminders).where(and(eq(reviewReminders.id, id), eq(reviewReminders.userId, userId)));
+  return { success: true };
+}
+
+export async function markReviewReminderSeen(userId: number, eventId: number) {
+  const db = await getDb(); if (!db) throw new Error("数据库暂不可用");
+  await db.update(reviewReminderEvents).set({ seenAt: new Date() }).where(and(eq(reviewReminderEvents.id, eventId), eq(reviewReminderEvents.userId, userId)));
+  return { success: true };
+}
+
+export async function triggerReviewReminderByTaskUid(taskUid: string) {
+  const db = await getDb(); if (!db) throw new Error("数据库暂不可用");
+  const rows = await db.select().from(reviewReminders).where(eq(reviewReminders.scheduleCronTaskUid, taskUid)).limit(1);
+  const reminder = rows[0];
+  if (!reminder) return { ok: true, skipped: "orphan" as const };
+  if (!reminder.enabled) return { ok: true, skipped: "paused" as const };
+  const now = new Date();
+  if (reminder.nextReviewAt > now) return { ok: true, skipped: "not-due" as const };
+  await db.insert(reviewReminderEvents).values({ reminderId: reminder.id, userId: reminder.userId, dueAt: reminder.nextReviewAt }).onDuplicateKeyUpdate({ set: { reminderId: reminder.id } });
+  let nextReviewAt = new Date(reminder.nextReviewAt);
+  do { nextReviewAt.setUTCDate(nextReviewAt.getUTCDate() + reminder.intervalDays); } while (nextReviewAt <= now);
+  await db.update(reviewReminders).set({ lastTriggeredAt: now, nextReviewAt }).where(eq(reviewReminders.id, reminder.id));
+  return { ok: true, reminderId: reminder.id, nextReviewAt };
+}
+
+export type AiConversationKind = "herb" | "formula" | "chapter";
+
+export async function listAiStudyConversations(userId: number, context?: { kind: AiConversationKind; title: string }) {
+  const db = await getDb(); if (!db) return [];
+  const conditions = [eq(aiStudyConversations.userId, userId)];
+  if (context) { conditions.push(eq(aiStudyConversations.contextKind, context.kind), eq(aiStudyConversations.contextTitle, context.title)); }
+  return db.select().from(aiStudyConversations).where(and(...conditions)).orderBy(desc(aiStudyConversations.updatedAt)).limit(20);
+}
+
+export async function getAiStudyConversation(userId: number, id: number) {
+  const db = await getDb(); if (!db) return undefined;
+  const conversation = (await db.select().from(aiStudyConversations).where(and(eq(aiStudyConversations.id, id), eq(aiStudyConversations.userId, userId))).limit(1))[0];
+  if (!conversation) return undefined;
+  const messages = await db.select().from(aiStudyMessages).where(eq(aiStudyMessages.conversationId, id)).orderBy(aiStudyMessages.createdAt);
+  return { conversation, messages };
+}
+
+export async function createAiStudyConversation(userId: number, input: { title: string; contextKind: AiConversationKind; contextTitle: string }) {
+  const db = await getDb(); if (!db) throw new Error("数据库暂不可用");
+  const result = await db.insert(aiStudyConversations).values({ userId, ...input });
+  return { id: Number(result[0].insertId) };
+}
+
+export async function appendAiStudyMessage(conversationId: number, role: "user" | "assistant", content: string) {
+  const db = await getDb(); if (!db) throw new Error("数据库暂不可用");
+  await db.insert(aiStudyMessages).values({ conversationId, role, content });
+  await db.update(aiStudyConversations).set({ updatedAt: new Date() }).where(eq(aiStudyConversations.id, conversationId));
+}
+
+export async function getRecentAiStudyMessages(userId: number, conversationId: number, limit = 8) {
+  const conversation = await getAiStudyConversation(userId, conversationId);
+  if (!conversation) return undefined;
+  return { conversation: conversation.conversation, messages: conversation.messages.slice(-limit) };
+}
+
+export async function deleteAiStudyConversation(userId: number, id: number) {
+  const db = await getDb(); if (!db) throw new Error("数据库暂不可用");
+  const conversation = await getAiStudyConversation(userId, id); if (!conversation) throw new Error("对话不存在或无权访问");
+  await db.delete(aiStudyMessages).where(eq(aiStudyMessages.conversationId, id));
+  await db.delete(aiStudyConversations).where(and(eq(aiStudyConversations.id, id), eq(aiStudyConversations.userId, userId)));
+  return { success: true };
 }
 
 export async function getStudyDesk(userId: number) {

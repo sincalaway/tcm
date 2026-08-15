@@ -15,6 +15,13 @@
       "when": 1786773596311,
       "tag": "0001_long_skaar",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1786776544262,
+      "tag": "0002_secret_bloodstorm",
+      "breakpoints": true
     }
   ]
 }

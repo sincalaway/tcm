@@ -2,19 +2,33 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TrpcContext } from "./_core/context";
 
 const dbMock = vi.hoisted(() => ({
+  archiveLearningGoal: vi.fn(),
+  attachReviewReminderSchedule: vi.fn(),
+  createLearningGoal: vi.fn(),
+  createReviewReminder: vi.fn(),
   createStudyNote: vi.fn(),
+  deleteReviewReminder: vi.fn(),
   deleteStudyNote: vi.fn(),
+  getReviewReminder: vi.fn(),
   getLearningOverview: vi.fn(),
   getStudyDesk: vi.fn(),
+  listLearningGoals: vi.fn(),
+  listReviewReminders: vi.fn(),
   listSavedItems: vi.fn(),
   listStudyNotes: vi.fn(),
+  markReviewReminderSeen: vi.fn(),
   setReadingProgress: vi.fn(),
   toggleLearningPathStep: vi.fn(),
   toggleSavedItem: vi.fn(),
+  updateLearningGoal: vi.fn(),
+  updateReviewReminder: vi.fn(),
   updateStudyNote: vi.fn(),
 }));
 
+const heartbeatMock = vi.hoisted(() => ({ createHeartbeatJob: vi.fn(), deleteHeartbeatJob: vi.fn(), updateHeartbeatJob: vi.fn() }));
+
 vi.mock("./db", () => dbMock);
+vi.mock("./_core/heartbeat", () => heartbeatMock);
 
 import { appRouter } from "./routers";
 
@@ -74,5 +88,31 @@ describe("study router", () => {
 
     expect(dbMock.getLearningOverview).toHaveBeenCalledWith(42);
     expect(dbMock.toggleLearningPathStep).toHaveBeenCalledWith(42, { pathSlug: "gui-zhi-ying-wei", step: 1 });
+  });
+
+  it("creates learning goals only for the authenticated user", async () => {
+    dbMock.createLearningGoal.mockResolvedValue({ id: 11 });
+    dbMock.listLearningGoals.mockResolvedValue([]);
+    const caller = appRouter.createCaller(createContext());
+    await caller.study.goals.create({ title: "完成三则条文研读", metric: "path_steps", targetCount: 3, deadlineAt: null });
+    await caller.study.goals.list();
+    expect(dbMock.createLearningGoal).toHaveBeenCalledWith(42, expect.objectContaining({ title: "完成三则条文研读", metric: "path_steps", targetCount: 3 }));
+    expect(dbMock.listLearningGoals).toHaveBeenCalledWith(42);
+  });
+
+  it("binds reminder scheduling and pending events to the authenticated user", async () => {
+    dbMock.createReviewReminder.mockResolvedValue({ id: 21 });
+    heartbeatMock.createHeartbeatJob.mockResolvedValue({ taskUid: "task-21", nextExecutionAt: null });
+    dbMock.attachReviewReminderSchedule.mockResolvedValue(undefined);
+    dbMock.listReviewReminders.mockResolvedValue({ reminders: [], pending: [] });
+    dbMock.markReviewReminderSeen.mockResolvedValue({ success: true });
+    const caller = appRouter.createCaller(createContext());
+    await caller.study.reminders.create({ title: "复习太阳病条文", goalId: null, intervalDays: 7, hourLocal: 9 });
+    await caller.study.reminders.list();
+    await caller.study.reminders.markSeen({ eventId: 31 });
+    expect(dbMock.createReviewReminder).toHaveBeenCalledWith(42, expect.objectContaining({ title: "复习太阳病条文", intervalDays: 7, hourUtc: 1 }));
+    expect(dbMock.attachReviewReminderSchedule).toHaveBeenCalledWith(42, 21, "task-21");
+    expect(dbMock.listReviewReminders).toHaveBeenCalledWith(42);
+    expect(dbMock.markReviewReminderSeen).toHaveBeenCalledWith(42, 31);
   });
 });
