@@ -1,13 +1,16 @@
 /** 宋刻书斋：经方页读取数据库条目，按方名、出处和药味全文检索。 */
 import { Search, SlidersHorizontal } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { Link, useSearch } from "wouter";
 import { PageMasthead } from "@/components/SiteChrome";
 import { ExternalSource, InkStamp, RuleLabel, StudyDetail } from "@/components/StudyElements";
 import { StudyMargin } from "@/components/StudyMargin";
 import { trpc } from "@/lib/trpc";
 
 export default function Formulas() {
-  const [query, setQuery] = useState(""); const [sourceTitle, setSourceTitle] = useState(""); const [selectedId, setSelectedId] = useState<number | null>(null);
+  const search = useSearch(); const initialQuery = new URLSearchParams(search).get("q") ?? "";
+  const [query, setQuery] = useState(initialQuery); const [sourceTitle, setSourceTitle] = useState(""); const [selectedId, setSelectedId] = useState<number | null>(null);
+  useEffect(() => { setQuery(new URLSearchParams(search).get("q") ?? ""); setSelectedId(null); }, [search]);
   const filters = trpc.catalog.filters.useQuery();
   const recordsQuery = trpc.catalog.formulas.useQuery({ query: query || undefined, sourceTitle: sourceTitle || undefined });
   const records = recordsQuery.data ?? []; const selected = records.find((record) => record.id === selectedId) ?? records[0];
@@ -20,4 +23,6 @@ export default function Formulas() {
 
 function Facet({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: string[] }) { return <label className="facet-select"><span>{label}</span><select value={value} onChange={(event) => onChange(event.target.value)}><option value="">不限</option>{options.map((item) => <option value={item} key={item}>{item}</option>)}</select></label>; }
 type FormulaRecord = { id: number; name: string; sourceTitle: string; sourceExcerpt: string | null; ingredients: string; structuralNote: string | null; sourceUrl: string | null; };
-function FormulaDetail({ formula }: { formula: FormulaRecord }) { const ingredients = (() => { try { return JSON.parse(formula.ingredients) as string[]; } catch { return []; } })(); return <StudyDetail title={formula.name} meta={formula.sourceTitle}><div className="detail-callout"><span>经典方剂研读</span><InkStamp>方</InkStamp></div><div className="detail-section"><RuleLabel>原文线索</RuleLabel><blockquote className="classic-quote">“{formula.sourceExcerpt}”</blockquote></div><div className="detail-section"><RuleLabel>组成药味</RuleLabel><div className="ingredient-list">{ingredients.map((item, index) => <span key={item}><i>{index + 1}</i>{item}</span>)}</div></div><div className="detail-section"><RuleLabel>结构提示</RuleLabel><p>{formula.structuralNote}</p></div>{formula.sourceUrl ? <ExternalSource href={formula.sourceUrl}>查阅原典来源</ExternalSource> : null}<StudyMargin resourceType="formula" resourceId={formula.id} resourceTitle={formula.name} /></StudyDetail>; }
+function FormulaDetail({ formula }: { formula: FormulaRecord }) { const ingredients = (() => { try { return JSON.parse(formula.ingredients) as string[]; } catch { return []; } })(); const chapter = resolveFormulaChapter(formula); const book = formula.sourceTitle.replace(/[《》]/g, ""); return <StudyDetail title={formula.name} meta={formula.sourceTitle}><div className="detail-callout"><span>经典方剂研读</span><InkStamp>方</InkStamp></div><div className="detail-section"><RuleLabel>原文线索</RuleLabel><blockquote className="classic-quote">“{formula.sourceExcerpt}”</blockquote></div><div className="detail-section"><RuleLabel>组成药味 · 逐味对读</RuleLabel><div className="ingredient-list">{ingredients.map((item, index) => <Link href={`/bencao?q=${encodeURIComponent(item)}`} key={item}><i>{index + 1}</i>{item}</Link>)}</div></div><div className="detail-section cross-reading"><RuleLabel>继续入卷</RuleLabel><p>可先逐味查阅本草条目，再回到原典确认“{formula.sourceTitle}”中的条文语境。</p>{chapter ? <Link href={`/guji?q=${encodeURIComponent(book)}&chapter=${encodeURIComponent(chapter)}`}>直达“{chapter}” →</Link> : <Link href={`/guji?q=${encodeURIComponent(book)}`}>检索“{formula.sourceTitle}”原文 →</Link>}</div><div className="detail-section"><RuleLabel>结构提示</RuleLabel><p>{formula.structuralNote}</p></div>{formula.sourceUrl ? <ExternalSource href={formula.sourceUrl}>查阅原典来源</ExternalSource> : null}<StudyMargin resourceType="formula" resourceId={formula.id} resourceTitle={formula.name} /></StudyDetail>; }
+
+function resolveFormulaChapter(formula: FormulaRecord) { if (formula.sourceTitle === "《伤寒论》") { if (formula.name === "大承气汤") return "辨阳明病脉证并治"; if (formula.name === "小柴胡汤") return "辨少阳病脉证并治"; return "辨太阳病脉证并治"; } if (formula.sourceTitle === "《金匮要略》") return "脏腑经络先后病脉证第一"; return null; }

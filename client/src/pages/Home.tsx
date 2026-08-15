@@ -84,6 +84,19 @@ export default function Home() {
         </div>
       </section>
 
+      <section className="trail-section paper-noise">
+        <div className="section-title-block">
+          <p className="eyebrow">三径对读 · 公开学习路径</p>
+          <h2>从一味药，走到一段原文</h2>
+          <p>不提供临床决策；以下路径仅用于建立药味、方剂与原典之间的学习线索。</p>
+        </div>
+        <div className="trail-grid">
+          <LearningTrail number="一" title="桂枝 · 营卫线" description="从桂枝本草条目出发，读桂枝汤的药味结构，再回到《伤寒论》原文。" steps={[{ label: "查桂枝", href: "/bencao?q=桂枝" }, { label: "读桂枝汤", href: "/jingfang?q=桂枝汤" }, { label: "对《伤寒论》", href: "/guji?q=伤寒论" }]} />
+          <LearningTrail number="二" title="茯苓 · 水液线" description="以茯苓为线索，对照五苓散与《金匮要略》相关文本。" steps={[{ label: "查茯苓", href: "/bencao?q=茯苓" }, { label: "读五苓散", href: "/jingfang?q=五苓散" }, { label: "对《金匮要略》", href: "/guji?q=金匮要略" }]} />
+          <LearningTrail number="三" title="白术 · 中焦线" description="从白术的本草索引进入理中丸，比较药味组合与条文出处。" steps={[{ label: "查白术", href: "/bencao?q=白术" }, { label: "读理中丸", href: "/jingfang?q=理中丸" }, { label: "对《伤寒论》", href: "/guji?q=伤寒论" }]} />
+        </div>
+      </section>
+
       <section className="featured-section">
         <div className="featured-herb-visual">
           <div className="vertical-note">本草图谱 · 一味入门</div>
@@ -132,4 +145,8 @@ export default function Home() {
       </section>
     </main>
   );
+}
+
+function LearningTrail({ number, title, description, steps }: { number: string; title: string; description: string; steps: { label: string; href: string }[] }) {
+  return <article className="learning-trail"><span className="trail-number">径{number}</span><h3>{title}</h3><p>{description}</p><ol>{steps.map((step, index) => <li key={step.href}><span>{index + 1}</span><Link href={step.href}>{step.label}<ArrowRight size={14} /></Link></li>)}</ol></article>;
 }
