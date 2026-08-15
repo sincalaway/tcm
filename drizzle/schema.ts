@@ -154,6 +154,19 @@ export const readingProgress = mysqlTable("reading_progress", {
   index("reading_progress_user_idx").on(table.userId, table.lastReadAt),
 ]);
 
+/** Per-user completion state for editorial learning trails; completedSteps is a JSON array of 1-based step numbers. */
+export const learningPathProgress = mysqlTable("learning_path_progress", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  pathSlug: varchar("pathSlug", { length: 96 }).notNull(),
+  completedSteps: text("completedSteps").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+  uniqueIndex("learning_path_progress_user_path_unique").on(table.userId, table.pathSlug),
+  index("learning_path_progress_user_idx").on(table.userId, table.updatedAt),
+]);
+
 export type Herb = typeof herbs.$inferSelect;
 export type Formula = typeof formulas.$inferSelect;
 export type Classic = typeof classics.$inferSelect;
@@ -161,3 +174,4 @@ export type ClassicChapter = typeof classicChapters.$inferSelect;
 export type SavedItem = typeof savedItems.$inferSelect;
 export type StudyNote = typeof studyNotes.$inferSelect;
 export type ReadingProgress = typeof readingProgress.$inferSelect;
+export type LearningPathProgress = typeof learningPathProgress.$inferSelect;

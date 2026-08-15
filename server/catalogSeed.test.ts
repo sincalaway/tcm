@@ -36,4 +36,13 @@ describe("source-backed starter catalog", () => {
       expect(new Set(slugs).size).toBe(slugs.length);
     }
   });
+
+  it("includes expanded formula records with a source-backed chapter study index", () => {
+    for (const name of ["麻黄汤", "小柴胡汤", "葛根汤", "半夏泻心汤", "四逆汤", "苓桂术甘汤"]) {
+      const record = formulaSeed.find((formula) => formula[1] === name);
+      expect(record, `${name} 应在经方目录中`).toBeDefined();
+      expect(record?.[3]).toMatch(/伤寒论|金匮要略/);
+      expect(record?.[7]).toBeTruthy();
+    }
+  });
 });

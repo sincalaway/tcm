@@ -1,19 +1,32 @@
 /**
  * 宋刻书斋：首页采用“书案 + 纵向书页”的非对称布局；首屏左侧为阅读与检索，右侧承载生成的宋刻书斋图景。
  */
-import { ArrowRight, BookOpen, Leaf, Search, ScrollText } from "lucide-react";
-import { FormEvent, useState } from "react";
+import { ArrowRight, Award, BookOpen, Check, Leaf, Search, ScrollText } from "lucide-react";
+import { FormEvent, useMemo, useState } from "react";
 import { useLocation, Link } from "wouter";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { startLogin } from "@/const";
 import { classics, formulas, herbs } from "@/data/tcmContent";
 import { IndexCta, InkStamp, RuleLabel } from "@/components/StudyElements";
+import { trpc } from "@/lib/trpc";
 
 const heroImage = "/manus-storage/tcm-hero-song-printing_db65d154.png";
 const botanicPlate = "/manus-storage/tcm-herb-botanical-plate_fe9e072d.png";
 const manuscriptImage = "/manus-storage/tcm-classics-manuscript_7ac13543.png";
 
+const learningTrails = [
+  { slug: "gui-zhi-ying-wei", number: "一", title: "桂枝 · 营卫线", description: "从桂枝本草条目出发，读桂枝汤的药味结构，再回到《伤寒论》原文。", steps: [{ label: "查桂枝", href: "/bencao?q=桂枝" }, { label: "读桂枝汤", href: "/jingfang?q=桂枝汤" }, { label: "对《伤寒论》", href: "/guji?q=伤寒论&chapter=辨太阳病脉证并治" }] },
+  { slug: "fu-ling-shui-ye", number: "二", title: "茯苓 · 水液线", description: "以茯苓为线索，对照五苓散与《金匮要略》相关文本。", steps: [{ label: "查茯苓", href: "/bencao?q=茯苓" }, { label: "读五苓散", href: "/jingfang?q=五苓散" }, { label: "对《金匮要略》", href: "/guji?q=金匮要略&chapter=痰饮咳嗽病脉证并治第十二" }] },
+  { slug: "bai-zhu-zhong-jiao", number: "三", title: "白术 · 中焦线", description: "从白术的本草索引进入理中丸，比较药味组合与条文出处。", steps: [{ label: "查白术", href: "/bencao?q=白术" }, { label: "读理中丸", href: "/jingfang?q=理中丸" }, { label: "对《伤寒论》", href: "/guji?q=伤寒论&chapter=辨太阳病脉证并治" }] },
+] as const;
+
 export default function Home() {
   const [, setLocation] = useLocation();
   const [query, setQuery] = useState("");
+  const { isAuthenticated } = useAuth();
+  const overviewQuery = trpc.study.overview.useQuery(undefined, { enabled: isAuthenticated });
+  const pathMutation = trpc.study.paths.toggleStep.useMutation({ onSuccess: () => overviewQuery.refetch() });
+  const completedByPath = useMemo(() => new Map((overviewQuery.data?.paths ?? []).map((item) => [item.pathSlug, item.completedSteps])), [overviewQuery.data?.paths]);
 
   function handleSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -21,132 +34,26 @@ export default function Home() {
     setLocation(`/bencao${normalized ? `?q=${encodeURIComponent(normalized)}` : ""}`);
   }
 
-  return (
-    <main>
-      <section className="hero-section paper-noise">
-        <div className="hero-copy">
-          <div className="hero-rail" aria-hidden="true"><span>卷一</span><i /></div>
-          <div className="hero-copy-inner">
-            <p className="eyebrow">一方书案 · 以索引入门</p>
-            <h1>
-              读一味本草，
-              <em>见一方脉络。</em>
-            </h1>
-            <p className="hero-lead">
-              从药材、经方到古籍原文，以可检索的书页结构，整理一条适合反复研读的中医学习路径。
-            </p>
-            <form className="hero-search" onSubmit={handleSearch}>
-              <Search size={20} aria-hidden="true" />
-              <label className="sr-only" htmlFor="home-search">搜索药名或关键词</label>
-              <input
-                id="home-search"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="试搜：桂枝、黄芪、茯苓……"
-              />
-              <button type="submit">检索本草</button>
-            </form>
-            <p className="search-hint">可从一味药开始，进入性味、归经与相关方剂的交叉阅读。</p>
-          </div>
-        </div>
-        <div className="hero-leaf-page">
-          <div className="hero-page-topline"><span>本草经方</span><span>卷首</span></div>
-          <img src={heroImage} alt="书案上的古籍、笔墨与草药静物" />
-          <div className="hero-image-caption">
-            <span>以检索重开一卷医书</span>
-            <InkStamp>研习</InkStamp>
-          </div>
-        </div>
-      </section>
+  return <main>
+    <section className="hero-section paper-noise">
+      <div className="hero-copy"><div className="hero-rail" aria-hidden="true"><span>卷一</span><i /></div><div className="hero-copy-inner"><p className="eyebrow">一方书案 · 以索引入门</p><h1>读一味本草，<em>见一方脉络。</em></h1><p className="hero-lead">从药材、经方到古籍原文，以可检索的书页结构，整理一条适合反复研读的中医学习路径。</p><form className="hero-search" onSubmit={handleSearch}><Search size={20} aria-hidden="true" /><label className="sr-only" htmlFor="home-search">搜索药名或关键词</label><input id="home-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="试搜：桂枝、黄芪、茯苓……" /><button type="submit">检索本草</button></form><p className="search-hint">可从一味药开始，进入性味、归经与相关方剂的交叉阅读。</p></div></div>
+      <div className="hero-leaf-page"><div className="hero-page-topline"><span>本草经方</span><span>卷首</span></div><img src={heroImage} alt="书案上的古籍、笔墨与草药静物" /><div className="hero-image-caption"><span>以检索重开一卷医书</span><InkStamp>研习</InkStamp></div></div>
+    </section>
 
-      <section className="path-section">
-        <div className="section-title-block">
-          <p className="eyebrow">卷次导读 · 由浅入深</p>
-          <h2>循目录入卷，按线索深读</h2>
-          <p>三个入口对应三种阅读动作：查一味、读一方、对一段原文。</p>
-        </div>
-        <div className="path-list">
-          <Link href="/bencao" className="path-item herb-path">
-            <div className="path-symbol"><Leaf size={24} strokeWidth={1.35} /></div>
-            <div><RuleLabel>甲 · 本草</RuleLabel><h3>中药详情查询</h3><p>性味、归经、药用部位与相关学习索引。</p></div>
-            <ArrowRight className="path-arrow" size={20} />
-          </Link>
-          <Link href="/jingfang" className="path-item formula-path">
-            <div className="path-symbol"><ScrollText size={24} strokeWidth={1.35} /></div>
-            <div><RuleLabel>乙 · 经方</RuleLabel><h3>经方结构对读</h3><p>从出处、药味到方义线索，保留原典入口。</p></div>
-            <ArrowRight className="path-arrow" size={20} />
-          </Link>
-          <Link href="/guji" className="path-item classic-path">
-            <div className="path-symbol"><BookOpen size={24} strokeWidth={1.35} /></div>
-            <div><RuleLabel>丙 · 文献</RuleLabel><h3>古籍原文阅览</h3><p>按典籍、篇章和摘录回到历史文本的语境。</p></div>
-            <ArrowRight className="path-arrow" size={20} />
-          </Link>
-        </div>
-      </section>
+    <section className="achievement-section paper-noise" aria-label="学习成就"><div className="achievement-heading"><div><p className="eyebrow">我的书案 · 学习成就</p><h2>把读过的每一页，留作可见的次第。</h2></div><Award size={34} strokeWidth={1.2} /></div>{isAuthenticated ? <div className="achievement-grid" aria-busy={overviewQuery.isLoading}><AchievementMetric label="已完成路线" value={`${overviewQuery.data?.completedPathCount ?? 0}/3`} detail="三径对读" /><AchievementMetric label="平均阅读" value={`${overviewQuery.data?.averageReadingProgress ?? 0}%`} detail={`${overviewQuery.data?.readingCount ?? 0} 部典籍已留进度`} /><AchievementMetric label="研读印记" value={`${(overviewQuery.data?.savedCount ?? 0) + (overviewQuery.data?.noteCount ?? 0)}`} detail={`${overviewQuery.data?.savedCount ?? 0} 枚书签 · ${overviewQuery.data?.noteCount ?? 0} 则朱批`} /></div> : <div className="achievement-empty"><p>登录后可保存路线进度、书签和学习笔记，并在此查看自己的研读成就。</p><button type="button" onClick={startLogin}>登录查看学习成就 <ArrowRight size={15} /></button></div>}</section>
 
-      <section className="trail-section paper-noise">
-        <div className="section-title-block">
-          <p className="eyebrow">三径对读 · 公开学习路径</p>
-          <h2>从一味药，走到一段原文</h2>
-          <p>不提供临床决策；以下路径仅用于建立药味、方剂与原典之间的学习线索。</p>
-        </div>
-        <div className="trail-grid">
-          <LearningTrail number="一" title="桂枝 · 营卫线" description="从桂枝本草条目出发，读桂枝汤的药味结构，再回到《伤寒论》原文。" steps={[{ label: "查桂枝", href: "/bencao?q=桂枝" }, { label: "读桂枝汤", href: "/jingfang?q=桂枝汤" }, { label: "对《伤寒论》", href: "/guji?q=伤寒论" }]} />
-          <LearningTrail number="二" title="茯苓 · 水液线" description="以茯苓为线索，对照五苓散与《金匮要略》相关文本。" steps={[{ label: "查茯苓", href: "/bencao?q=茯苓" }, { label: "读五苓散", href: "/jingfang?q=五苓散" }, { label: "对《金匮要略》", href: "/guji?q=金匮要略" }]} />
-          <LearningTrail number="三" title="白术 · 中焦线" description="从白术的本草索引进入理中丸，比较药味组合与条文出处。" steps={[{ label: "查白术", href: "/bencao?q=白术" }, { label: "读理中丸", href: "/jingfang?q=理中丸" }, { label: "对《伤寒论》", href: "/guji?q=伤寒论" }]} />
-        </div>
-      </section>
+    <section className="path-section"><div className="section-title-block"><p className="eyebrow">卷次导读 · 由浅入深</p><h2>循目录入卷，按线索深读</h2><p>三个入口对应三种阅读动作：查一味、读一方、对一段原文。</p></div><div className="path-list"><Link href="/bencao" className="path-item herb-path"><div className="path-symbol"><Leaf size={24} strokeWidth={1.35} /></div><div><RuleLabel>甲 · 本草</RuleLabel><h3>中药详情查询</h3><p>性味、归经、药用部位与相关学习索引。</p></div><ArrowRight className="path-arrow" size={20} /></Link><Link href="/jingfang" className="path-item formula-path"><div className="path-symbol"><ScrollText size={24} strokeWidth={1.35} /></div><div><RuleLabel>乙 · 经方</RuleLabel><h3>经方结构对读</h3><p>从出处、药味到方义线索，保留原典入口。</p></div><ArrowRight className="path-arrow" size={20} /></Link><Link href="/guji" className="path-item classic-path"><div className="path-symbol"><BookOpen size={24} strokeWidth={1.35} /></div><div><RuleLabel>丙 · 文献</RuleLabel><h3>古籍原文阅览</h3><p>按典籍、篇章和摘录回到历史文本的语境。</p></div><ArrowRight className="path-arrow" size={20} /></Link></div></section>
 
-      <section className="featured-section">
-        <div className="featured-herb-visual">
-          <div className="vertical-note">本草图谱 · 一味入门</div>
-          <img src={botanicPlate} alt="传统本草风格的药材线描图谱" />
-        </div>
-        <div className="featured-content">
-          <p className="eyebrow">本周书签 · 药味索引</p>
-          <h2>从药味看见方中位置</h2>
-          <p className="featured-lead">药物条目并不止于一个结论。把性味、归经、药用部位和相关经方并置，才容易建立可持续的记忆线索。</p>
-          <div className="mini-index-grid">
-            {herbs.slice(0, 4).map((herb, index) => (
-              <Link href={`/bencao?q=${encodeURIComponent(herb.name)}`} key={herb.id} className="mini-index-item">
-                <span>0{index + 1}</span><b>{herb.name}</b><small>{herb.index.split("、")[0]}</small>
-              </Link>
-            ))}
-          </div>
-          <IndexCta href="/bencao" label="进入本草索引" detail="从常见药味开始查阅" />
-        </div>
-      </section>
+    <section className="trail-section paper-noise"><div className="section-title-block"><p className="eyebrow">三径对读 · 公开学习路径</p><h2>从一味药，走到一段原文</h2><p>不提供临床决策；以下路径仅用于建立药味、方剂与原典之间的学习线索。</p></div><div className="trail-grid">{learningTrails.map((trail) => <LearningTrail key={trail.slug} {...trail} completedSteps={completedByPath.get(trail.slug) ?? []} onToggle={(step) => { if (!isAuthenticated) { startLogin(); return; } pathMutation.mutate({ pathSlug: trail.slug, step }); }} />)}</div></section>
 
-      <section className="shelf-section paper-noise">
-        <div className="shelf-copy">
-          <p className="eyebrow">经方 · 条文 · 出处</p>
-          <h2>让一则条文，成为可回溯的阅读路径。</h2>
-          <p>首版以五首常见方为索引样本：先读其出处，再看药味结构，最后转到古籍原文继续对读。</p>
-          <div className="shelf-formulas">
-            {formulas.slice(0, 3).map((formula) => <span key={formula.id}>{formula.name}</span>)}
-          </div>
-          <IndexCta href="/jingfang" label="展开经方页" detail="查看出处与药味组成" />
-        </div>
-        <div className="shelf-image-wrap">
-          <img src={manuscriptImage} alt="摆放在书案上的古籍文献与朱印" />
-          <div className="shelf-caption"><span>文献旁读</span><b>以原典为锚</b></div>
-        </div>
-      </section>
+    <section className="featured-section"><div className="featured-herb-visual"><div className="vertical-note">本草图谱 · 一味入门</div><img src={botanicPlate} alt="传统本草风格的药材线描图谱" /></div><div className="featured-content"><p className="eyebrow">本周书签 · 药味索引</p><h2>从药味看见方中位置</h2><p className="featured-lead">药物条目并不止于一个结论。把性味、归经、药用部位和相关经方并置，才容易建立可持续的记忆线索。</p><div className="mini-index-grid">{herbs.slice(0, 4).map((herb, index) => <Link href={`/bencao?q=${encodeURIComponent(herb.name)}`} key={herb.id} className="mini-index-item"><span>0{index + 1}</span><b>{herb.name}</b><small>{herb.index.split("、")[0]}</small></Link>)}</div><IndexCta href="/bencao" label="进入本草索引" detail="从常见药味开始查阅" /></div></section>
 
-      <section className="classic-strip">
-        <div><p className="eyebrow">藏书目录 · 文献互读</p><h2>四部典籍，四条阅读线索。</h2></div>
-        <div className="classic-strip-list">
-          {classics.map((classic, index) => (
-            <Link href={`/guji?book=${classic.id}`} className="classic-strip-item" key={classic.id}>
-              <span>0{index + 1}</span><b>{classic.title}</b><small>{classic.category}</small>
-            </Link>
-          ))}
-        </div>
-      </section>
-    </main>
-  );
+    <section className="shelf-section paper-noise"><div className="shelf-copy"><p className="eyebrow">经方 · 条文 · 出处</p><h2>让一则条文，成为可回溯的阅读路径。</h2><p>首版以多首经典方为索引样本：先读其出处，再看药味结构，最后转到古籍原文继续对读。</p><div className="shelf-formulas">{formulas.slice(0, 5).map((formula) => <span key={formula.id}>{formula.name}</span>)}</div><IndexCta href="/jingfang" label="展开经方页" detail="查看出处与药味组成" /></div><div className="shelf-image-wrap"><img src={manuscriptImage} alt="摆放在书案上的古籍文献与朱印" /><div className="shelf-caption"><span>文献旁读</span><b>以原典为锚</b></div></div></section>
+
+    <section className="classic-strip"><div><p className="eyebrow">藏书目录 · 文献互读</p><h2>四部典籍，四条阅读线索。</h2></div><div className="classic-strip-list">{classics.map((classic, index) => <Link href={`/guji?q=${encodeURIComponent(classic.title)}`} className="classic-strip-item" key={classic.id}><span>0{index + 1}</span><b>{classic.title}</b><small>{classic.category}</small></Link>)}</div></section>
+  </main>;
 }
 
-function LearningTrail({ number, title, description, steps }: { number: string; title: string; description: string; steps: { label: string; href: string }[] }) {
-  return <article className="learning-trail"><span className="trail-number">径{number}</span><h3>{title}</h3><p>{description}</p><ol>{steps.map((step, index) => <li key={step.href}><span>{index + 1}</span><Link href={step.href}>{step.label}<ArrowRight size={14} /></Link></li>)}</ol></article>;
-}
+function AchievementMetric({ label, value, detail }: { label: string; value: string; detail: string }) { return <div className="achievement-metric"><span>{label}</span><b>{value}</b><small>{detail}</small></div>; }
+
+function LearningTrail({ number, title, description, steps, completedSteps, onToggle }: { number: string; title: string; description: string; steps: readonly { label: string; href: string }[]; completedSteps: number[]; onToggle: (step: number) => void }) { const percent = Math.round((completedSteps.length / steps.length) * 100); return <article className="learning-trail"><div className="trail-head"><span className="trail-number">径{number}</span><span className="trail-progress-copy">{percent}%</span></div><h3>{title}</h3><p>{description}</p><div className="trail-progress"><i style={{ width: `${percent}%` }} /></div><ol>{steps.map((step, index) => { const complete = completedSteps.includes(index + 1); return <li key={step.href} className={complete ? "complete" : ""}><span>{index + 1}</span><Link href={step.href}>{step.label}<ArrowRight size={14} /></Link><button type="button" aria-label={`标记“${step.label}”${complete ? "未完成" : "已完成"}`} onClick={() => onToggle(index + 1)}><Check size={13} /></button></li>; })}</ol></article>; }

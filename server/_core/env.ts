@@ -7,4 +7,10 @@ export const ENV = {
   isProduction: process.env.NODE_ENV === "production",
   forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
+  localLlmBaseUrl: process.env.LOCAL_LLM_BASE_URL ?? "",
+  localLlmModel: process.env.LOCAL_LLM_MODEL ?? "",
+  localLlmApiKey: process.env.LOCAL_LLM_API_KEY ?? "",
+  networkLlmBaseUrl: process.env.NETWORK_LLM_BASE_URL ?? "",
+  networkLlmModel: process.env.NETWORK_LLM_MODEL ?? "",
+  networkLlmApiKey: process.env.NETWORK_LLM_API_KEY ?? "",
 };

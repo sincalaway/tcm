@@ -7,6 +7,7 @@ import {
   formulas,
   herbs,
   InsertUser,
+  learningPathProgress,
   readingProgress,
   savedItems,
   studyNotes,
@@ -225,6 +226,40 @@ export async function setReadingProgress(userId: number, input: { classicId: num
   const now = new Date();
   await db.insert(readingProgress).values({ userId, classicId: input.classicId, chapterId: input.chapterId ?? null, progressPercent: input.progressPercent, lastReadAt: now }).onDuplicateKeyUpdate({ set: { chapterId: input.chapterId ?? null, progressPercent: input.progressPercent, lastReadAt: now } });
   return { success: true };
+}
+
+export async function getLearningOverview(userId: number) {
+  const db = await getDb();
+  if (!db) return { savedCount: 0, noteCount: 0, readingCount: 0, averageReadingProgress: 0, completedPathCount: 0, paths: [] as Array<{ pathSlug: string; completedSteps: number[] }> };
+  const [savedRows, noteRows, progressRows, pathRows] = await Promise.all([
+    db.select({ id: savedItems.id }).from(savedItems).where(eq(savedItems.userId, userId)),
+    db.select({ id: studyNotes.id }).from(studyNotes).where(eq(studyNotes.userId, userId)),
+    db.select({ progressPercent: readingProgress.progressPercent }).from(readingProgress).where(eq(readingProgress.userId, userId)),
+    db.select({ pathSlug: learningPathProgress.pathSlug, completedSteps: learningPathProgress.completedSteps }).from(learningPathProgress).where(eq(learningPathProgress.userId, userId)),
+  ]);
+  const paths = pathRows.map((row) => ({ pathSlug: row.pathSlug, completedSteps: parseCompletedSteps(row.completedSteps) }));
+  return {
+    savedCount: savedRows.length,
+    noteCount: noteRows.length,
+    readingCount: progressRows.length,
+    averageReadingProgress: progressRows.length ? Math.round(progressRows.reduce((sum, item) => sum + item.progressPercent, 0) / progressRows.length) : 0,
+    completedPathCount: paths.filter((path) => path.completedSteps.length >= 3).length,
+    paths,
+  };
+}
+
+export async function toggleLearningPathStep(userId: number, input: { pathSlug: string; step: number }) {
+  const db = await getDb();
+  if (!db) throw new Error("数据库暂不可用");
+  const found = await db.select().from(learningPathProgress).where(and(eq(learningPathProgress.userId, userId), eq(learningPathProgress.pathSlug, input.pathSlug))).limit(1);
+  const completedSteps = parseCompletedSteps(found[0]?.completedSteps).filter((step) => step >= 1 && step <= 3);
+  const next = completedSteps.includes(input.step) ? completedSteps.filter((step) => step !== input.step) : [...completedSteps, input.step].sort((a, b) => a - b);
+  await db.insert(learningPathProgress).values({ userId, pathSlug: input.pathSlug, completedSteps: JSON.stringify(next) }).onDuplicateKeyUpdate({ set: { completedSteps: JSON.stringify(next), updatedAt: new Date() } });
+  return { completedSteps: next };
+}
+
+function parseCompletedSteps(value: string | null | undefined) {
+  try { const parsed = JSON.parse(value ?? "[]"); return Array.isArray(parsed) ? parsed.filter((item): item is number => Number.isInteger(item)) : []; } catch { return []; }
 }
 
 export async function getStudyDesk(userId: number) {

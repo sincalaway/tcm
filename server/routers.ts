@@ -3,6 +3,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router } from "./_core/trpc";
 import { catalogRouter } from "./routers/catalog";
+import { aiStudyRouter } from "./routers/aiStudy";
 import { studyRouter } from "./routers/study";
 
 export const appRouter = router({
@@ -19,6 +20,7 @@ export const appRouter = router({
     }),
   }),
   catalog: catalogRouter,
+  aiStudy: aiStudyRouter,
   study: studyRouter,
 });
 
