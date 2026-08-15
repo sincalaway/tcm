@@ -1,7 +1,7 @@
 /** 宋刻书斋：本草页连接可维护目录，支持按类别、性、归经与关键词交叉检索。 */
 import { Search, SlidersHorizontal } from "lucide-react";
-import { useState } from "react";
-import { useLocation } from "wouter";
+import { useEffect, useState } from "react";
+import { Link, useSearch } from "wouter";
 import { PageMasthead } from "@/components/SiteChrome";
 import { ExternalSource, InkStamp, RuleLabel, StudyDetail } from "@/components/StudyElements";
 import { StudyMargin } from "@/components/StudyMargin";
@@ -10,13 +10,14 @@ import { trpc } from "@/lib/trpc";
 const pharmacopoeiaUrl = "https://ydz.chp.org.cn/";
 
 export default function Herbs() {
-  const [location] = useLocation();
-  const initialQuery = new URLSearchParams(location.split("?")[1] ?? "").get("q") ?? "";
+  const search = useSearch();
+  const initialQuery = new URLSearchParams(search).get("q") ?? "";
   const [query, setQuery] = useState(initialQuery);
   const [category, setCategory] = useState("");
   const [nature, setNature] = useState("");
   const [meridian, setMeridian] = useState("");
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  useEffect(() => { setQuery(new URLSearchParams(search).get("q") ?? ""); setSelectedId(null); }, [search]);
   const filters = trpc.catalog.filters.useQuery();
   const recordsQuery = trpc.catalog.herbs.useQuery({ query: query || undefined, category: category || undefined, nature: nature || undefined, meridian: meridian || undefined });
   const records = recordsQuery.data ?? [];
@@ -47,5 +48,7 @@ type HerbRecord = {
 };
 
 function HerbDetail({ herb }: { herb: HerbRecord }) {
-  return <StudyDetail title={herb.name} meta={herb.pinyin ?? "本草条目"}><div className="detail-callout"><span>{herb.category ?? "本草目录"}</span><InkStamp>本草</InkStamp></div><dl className="character-grid"><div><dt>性</dt><dd>{herb.nature ?? "—"}</dd></div><div><dt>味</dt><dd>{herb.taste ?? "—"}</dd></div><div><dt>归经</dt><dd>{herb.meridians ?? "—"}</dd></div><div><dt>药用部位</dt><dd>{herb.medicinalPart ?? "—"}</dd></div></dl><div className="detail-section"><RuleLabel>传统功用索引</RuleLabel><p className="large-detail-copy">{herb.traditionalIndex}</p></div><div className="detail-section"><RuleLabel>研读提示</RuleLabel><p>{herb.learningNote}</p></div>{herb.sourceUrl ? <ExternalSource href={herb.sourceUrl}>查阅来源入口</ExternalSource> : null}<StudyMargin resourceType="herb" resourceId={herb.id} resourceTitle={herb.name} /></StudyDetail>;
+  const chapter = resolveHerbChapter(herb.name); return <StudyDetail title={herb.name} meta={herb.pinyin ?? "本草条目"}><div className="detail-callout"><span>{herb.category ?? "本草目录"}</span><InkStamp>本草</InkStamp></div><dl className="character-grid"><div><dt>性</dt><dd>{herb.nature ?? "—"}</dd></div><div><dt>味</dt><dd>{herb.taste ?? "—"}</dd></div><div><dt>归经</dt><dd>{herb.meridians ?? "—"}</dd></div><div><dt>药用部位</dt><dd>{herb.medicinalPart ?? "—"}</dd></div></dl><div className="detail-section"><RuleLabel>传统功用索引</RuleLabel><p className="large-detail-copy">{herb.traditionalIndex}</p></div><div className="detail-section"><RuleLabel>研读提示</RuleLabel><p>{herb.learningNote}</p></div><div className="detail-section cross-reading"><RuleLabel>交叉研读</RuleLabel><p>以“{herb.name}”为线索，转入经方目录观察其在方中与条文中的位置。</p><Link href={`/jingfang?q=${encodeURIComponent(herb.name)}`}>查含“{herb.name}”的经方 →</Link>{chapter ? <Link className="chapter-link" href={`/guji?q=伤寒论&chapter=${encodeURIComponent(chapter)}`}>直达“{chapter}” →</Link> : null}</div>{herb.sourceUrl ? <ExternalSource href={herb.sourceUrl}>查阅来源入口</ExternalSource> : null}<StudyMargin resourceType="herb" resourceId={herb.id} resourceTitle={herb.name} /></StudyDetail>;
 }
+
+function resolveHerbChapter(name: string) { if (["柴胡", "黄芩", "半夏"].includes(name)) return "辨少阳病脉证并治"; if (["桂枝", "白芍", "甘草", "生姜", "茯苓", "泽泻"].includes(name)) return "辨太阳病脉证并治"; return null; }
