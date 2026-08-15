@@ -110,7 +110,7 @@ async function seedCatalog() {
   const shangHanChapterIds = new Map(allChapters.filter((chapter) => chapter.classicId === shangHanId).map((chapter) => [chapter.title, chapter.id]));
   const passageRows = shangHanPassageSeed.flatMap(([chapterTitle, passageNumber, title, excerpt, keywords, sourceReference, sourceUrl]) => {
     const chapterId = shangHanChapterIds.get(chapterTitle);
-    return shangHanId && chapterId ? [{ classicId: shangHanId, chapterId, passageNumber, title, excerpt, keywords, sourceReference, sourceUrl }] : [];
+    return shangHanId && chapterId ? [{ classicId: shangHanId, chapterId, passageNumber, title, excerpt, keywords, sourceReference: `《伤寒论》·${chapterTitle}·第${passageNumber}条`, sourceUrl }] : [];
   });
   if (passageRows.length) await db.insert(classicPassages).values(passageRows).onDuplicateKeyUpdate({ set: { updatedAt: new Date() } });
   const [allPassages, allFormulas] = await Promise.all([db.select().from(classicPassages), db.select().from(formulas)]);

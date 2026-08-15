@@ -46,6 +46,20 @@ describe("source-backed starter catalog", () => {
     }
   });
 
+  it("keeps chapter-level citation fields stable for every passage", () => {
+    const keys = new Set(shangHanPassageSeed.map((passage) => `${passage[0]}:${passage[1]}`));
+    expect(keys.size).toBe(shangHanPassageSeed.length);
+    for (const [chapterTitle, passageNumber, title, excerpt, keywords, sourceReference, sourceUrl] of shangHanPassageSeed) {
+      expect(chapterTitle).toBeTruthy();
+      expect(passageNumber).toBeGreaterThan(0);
+      expect(title).toBeTruthy();
+      expect(excerpt).toBeTruthy();
+      expect(keywords).toBeTruthy();
+      expect(sourceReference).toMatch(/第\d+条|条文|卷|篇/);
+      expect(sourceUrl).toMatch(/^https:\/\//);
+    }
+  });
+
   it("keeps expanded Shang Han Lun passages and formula mappings traceable", () => {
     expect(shangHanPassageSeed.length).toBeGreaterThanOrEqual(40);
     expect(shangHanPassageSeed.every((passage) => passage[6].includes("zh.wikisource.org"))).toBe(true);
