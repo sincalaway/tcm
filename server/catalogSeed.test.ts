@@ -57,6 +57,32 @@ describe("source-backed starter catalog", () => {
     const shangHanFormulaSlugs = formulaSeed.filter((formula) => formula[3] === "《伤寒论》").map((formula) => formula[0]);
     for (const formulaSlug of shangHanFormulaSlugs) {
       expect(formulaPassageSeed.some((mapping) => mapping[0] === formulaSlug), `${formulaSlug} 应关联至少一条《伤寒论》条文`).toBe(true);
+      expect(formulaPassageSeed.some((mapping) => mapping[0] === formulaSlug && mapping[3] === "primary"), `${formulaSlug} 应存在默认直达条文`).toBe(true);
     }
+  });
+
+  it("covers the scoped representative passages across all six channels, 霍乱 and 差后劳复", () => {
+    const requiredCoverage = {
+      "辨太阳病脉证并治": ["gui-zhi-tang", "ma-huang-tang", "wu-ling-san"],
+      "辨阳明病脉证并治": ["da-cheng-qi-tang", "bai-hu-tang", "ma-zi-ren-wan"],
+      "辨少阳病脉证并治": ["xiao-chai-hu-tang", "da-chai-hu-tang", "chai-hu-gui-zhi-tang", "chai-hu-gui-zhi-gan-jiang-tang"],
+      "辨太阴病脉证并治": ["gui-zhi-jia-shao-yao-tang", "gui-zhi-jia-da-huang-tang", "gui-zhi-tang"],
+      "辨少阴病脉证并治": ["si-ni-tang", "zhen-wu-tang", "tao-hua-tang", "fu-zi-tang", "bai-tong-tang", "tong-mai-si-ni-tang", "ma-huang-fu-zi-xi-xin-tang"],
+      "辨厥阴病脉证并治": ["wu-mei-wan", "dang-gui-si-ni-tang"],
+      "辨霍乱病脉证并治": ["wu-ling-san", "li-zhong-wan"],
+      "辨阴阳易差后劳复病脉证并治": ["xiao-chai-hu-tang", "zhi-shi-zhi-zi-chi-tang"],
+    } as const;
+
+    for (const [chapterTitle, formulaSlugs] of Object.entries(requiredCoverage)) {
+      expect(shangHanPassageSeed.some((passage) => passage[0] === chapterTitle), `${chapterTitle} 应保留代表性条文`).toBe(true);
+      for (const formulaSlug of formulaSlugs) {
+        expect(formulaPassageSeed.some((mapping) => mapping[0] === formulaSlug && mapping[1] === chapterTitle), `${formulaSlug} 应映射至${chapterTitle}`).toBe(true);
+      }
+    }
+
+    const passageKeys = new Set(shangHanPassageSeed.map((passage) => `${passage[0]}:${passage[1]}`));
+    const mappingKeys = formulaPassageSeed.map((mapping) => `${mapping[0]}:${mapping[1]}:${mapping[2]}`);
+    expect(new Set(mappingKeys).size).toBe(mappingKeys.length);
+    expect(formulaPassageSeed.every((mapping) => passageKeys.has(`${mapping[1]}:${mapping[2]}`))).toBe(true);
   });
 });

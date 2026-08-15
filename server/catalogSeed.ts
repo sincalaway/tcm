@@ -176,7 +176,6 @@ export const formulaPassageSeed = [
   ["wu-ling-san", "辨太阳病脉证并治", 4, "primary", "以太阳病发汗后条文对读五苓散。"],
   ["wu-ling-san", "辨霍乱病脉证并治", 1, "related", "保留霍乱篇中的相关学习入口。"],
   ["li-zhong-wan", "辨霍乱病脉证并治", 1, "primary", "以霍乱篇条文定位理中丸。"],
-  ["wu-ling-san", "辨霍乱病脉证并治", 1, "related", "以霍乱篇同条文补充五苓散的跨篇对读入口。"],
   ["da-cheng-qi-tang", "辨阳明病脉证并治", 1, "primary", "以阳明潮热腹满条文对读大承气汤。"],
   ["ge-gen-tang", "辨太阳病脉证并治", 2, "primary", "以项背强几几条文定位葛根汤。"],
   ["ban-xia-xie-xin-tang", "辨发汗吐下后脉证并治", 1, "primary", "以心下痞条文对读半夏泻心汤。"],
