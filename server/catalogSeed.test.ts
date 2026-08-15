@@ -47,9 +47,9 @@ describe("source-backed starter catalog", () => {
   });
 
   it("keeps expanded Shang Han Lun passages and formula mappings traceable", () => {
-    expect(shangHanPassageSeed.length).toBeGreaterThanOrEqual(30);
+    expect(shangHanPassageSeed.length).toBeGreaterThanOrEqual(40);
     expect(shangHanPassageSeed.every((passage) => passage[6].includes("zh.wikisource.org"))).toBe(true);
-    expect(shangHanPassageSeed.filter((passage) => passage[0] === "辨太阳病脉证并治").length).toBeGreaterThanOrEqual(11);
+    expect(shangHanPassageSeed.filter((passage) => passage[0] === "辨太阳病脉证并治").length).toBeGreaterThanOrEqual(14);
     expect(shangHanPassageSeed.filter((passage) => passage[0] === "辨阳明病脉证并治").length).toBeGreaterThanOrEqual(10);
     for (const formulaSlug of ["ma-huang-tang", "xiao-chai-hu-tang", "ban-xia-xie-xin-tang", "si-ni-tang"]) {
       expect(formulaPassageSeed.some((mapping) => mapping[0] === formulaSlug), `${formulaSlug} 应关联具体条文`).toBe(true);
@@ -63,12 +63,12 @@ describe("source-backed starter catalog", () => {
 
   it("covers the scoped representative passages across all six channels, 霍乱 and 差后劳复", () => {
     const requiredCoverage = {
-      "辨太阳病脉证并治": ["gui-zhi-tang", "ma-huang-tang", "wu-ling-san"],
+      "辨太阳病脉证并治": ["gui-zhi-tang", "ma-huang-tang", "wu-ling-san", "gui-zhi-qu-shao-yao-tang", "ge-gen-jia-ban-xia-tang", "ge-gen-huang-qin-huang-lian-tang"],
       "辨阳明病脉证并治": ["da-cheng-qi-tang", "bai-hu-tang", "ma-zi-ren-wan"],
       "辨少阳病脉证并治": ["xiao-chai-hu-tang", "da-chai-hu-tang", "chai-hu-gui-zhi-tang", "chai-hu-gui-zhi-gan-jiang-tang"],
       "辨太阴病脉证并治": ["gui-zhi-jia-shao-yao-tang", "gui-zhi-jia-da-huang-tang", "gui-zhi-tang"],
       "辨少阴病脉证并治": ["si-ni-tang", "zhen-wu-tang", "tao-hua-tang", "fu-zi-tang", "bai-tong-tang", "tong-mai-si-ni-tang", "ma-huang-fu-zi-xi-xin-tang"],
-      "辨厥阴病脉证并治": ["wu-mei-wan", "dang-gui-si-ni-tang"],
+      "辨厥阴病脉证并治": ["wu-mei-wan", "dang-gui-si-ni-tang", "bai-tou-weng-tang", "bai-hu-tang", "si-ni-tang", "xiao-cheng-qi-tang"],
       "辨霍乱病脉证并治": ["wu-ling-san", "li-zhong-wan"],
       "辨阴阳易差后劳复病脉证并治": ["xiao-chai-hu-tang", "zhi-shi-zhi-zi-chi-tang"],
     } as const;

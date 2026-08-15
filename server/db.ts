@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, like, or } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, like, or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   aiStudyConversations,
@@ -30,6 +30,7 @@ import { extractText } from "unpdf";
 export type ResourceType = "herb" | "formula" | "classic" | "chapter";
 const KNOWLEDGE_ALLOWED_TYPES = new Set(["text/plain", "text/markdown", "application/pdf"]);
 const KNOWLEDGE_MAX_BYTES = 5 * 1024 * 1024;
+const KNOWLEDGE_MAX_TEXT_BYTES = 12 * 1024 * 1024;
 
 let _db: ReturnType<typeof drizzle> | null = null;
 let seedPromise: Promise<void> | null = null;
@@ -476,6 +477,14 @@ export async function markAllReviewRemindersSeen(userId: number) {
   return { success: true };
 }
 
+export async function deleteReviewNotifications(userId: number, eventIds: number[]) {
+  const uniqueIds = Array.from(new Set(eventIds));
+  if (!uniqueIds.length) return { success: true, deleted: 0 };
+  const db = await getDb(); if (!db) throw new Error("数据库暂不可用");
+  await db.delete(reviewReminderEvents).where(and(eq(reviewReminderEvents.userId, userId), inArray(reviewReminderEvents.id, uniqueIds)));
+  return { success: true, deleted: uniqueIds.length };
+}
+
 export async function triggerReviewReminderByTaskUid(taskUid: string) {
   const db = await getDb(); if (!db) throw new Error("数据库暂不可用");
   const rows = await db.select().from(reviewReminders).where(eq(reviewReminders.scheduleCronTaskUid, taskUid)).limit(1);
@@ -570,13 +579,15 @@ export async function uploadKnowledgeDocument(userId: number, input: { fileName:
   const buffer = Buffer.from(input.base64, "base64");
   if (!buffer.length || buffer.length > KNOWLEDGE_MAX_BYTES) throw new Error("文件必须小于或等于 5MB");
   const title = normalizeKnowledgeFileName(input.fileName);
-  const { key, url } = await storagePut(`knowledge/${userId}/${Date.now()}-${title}`, buffer, input.mimeType);
-  let textPreview: string | null = null;
-  if (input.mimeType === "text/plain" || input.mimeType === "text/markdown") textPreview = buffer.toString("utf8").slice(0, 6000);
+  let textContent: string | null = null;
+  if (input.mimeType === "text/plain" || input.mimeType === "text/markdown") textContent = buffer.toString("utf8");
   if (input.mimeType === "application/pdf") {
-    try { const extracted = await extractText(new Uint8Array(buffer), { mergePages: true }); textPreview = extracted.text.replace(/\s+/g, " ").trim().slice(0, 6000) || null; } catch { textPreview = null; }
+    try { const extracted = await extractText(new Uint8Array(buffer), { mergePages: true }); textContent = extracted.text.replace(/\s+/g, " ").trim() || null; } catch { textContent = null; }
   }
-  const result = await db.insert(knowledgeDocuments).values({ userId, title, mimeType: input.mimeType, sizeBytes: buffer.length, storageKey: key, storageUrl: url, textPreview });
+  if (textContent && Buffer.byteLength(textContent, "utf8") > KNOWLEDGE_MAX_TEXT_BYTES) throw new Error("文档可检索正文过长，请拆分后上传");
+  const { key, url } = await storagePut(`knowledge/${userId}/${Date.now()}-${title}`, buffer, input.mimeType);
+  const textPreview = textContent?.slice(0, 6000) || null;
+  const result = await db.insert(knowledgeDocuments).values({ userId, title, mimeType: input.mimeType, sizeBytes: buffer.length, storageKey: key, storageUrl: url, textPreview, textContent });
   return { id: Number(result[0].insertId), title, mimeType: input.mimeType, sizeBytes: buffer.length };
 }
 
@@ -585,6 +596,30 @@ export async function listKnowledgeDocuments(userId: number, query?: string) {
   const rows = await db.select({ id: knowledgeDocuments.id, title: knowledgeDocuments.title, mimeType: knowledgeDocuments.mimeType, sizeBytes: knowledgeDocuments.sizeBytes, textPreview: knowledgeDocuments.textPreview, createdAt: knowledgeDocuments.createdAt, updatedAt: knowledgeDocuments.updatedAt }).from(knowledgeDocuments).where(eq(knowledgeDocuments.userId, userId)).orderBy(desc(knowledgeDocuments.updatedAt));
   const normalized = query?.trim().toLocaleLowerCase("zh-CN");
   return normalized ? rows.filter((row) => `${row.title}\n${row.textPreview ?? ""}`.toLocaleLowerCase("zh-CN").includes(normalized)) : rows;
+}
+
+function buildKnowledgeSearchHit(text: string, normalizedQuery: string) {
+  const matchIndex = text.toLocaleLowerCase("zh-CN").indexOf(normalizedQuery);
+  if (matchIndex < 0) return null;
+  const excerptStart = Math.max(0, matchIndex - 96);
+  const excerptEnd = Math.min(text.length, matchIndex + normalizedQuery.length + 220);
+  const prefix = excerptStart > 0 ? "…" : "";
+  const suffix = excerptEnd < text.length ? "…" : "";
+  return { matchIndex, excerpt: `${prefix}${text.slice(excerptStart, excerptEnd)}${suffix}`, matchOffset: matchIndex - excerptStart + prefix.length, matchLength: normalizedQuery.length };
+}
+
+export async function searchKnowledgeDocuments(userId: number, query: string) {
+  const normalized = query.trim().toLocaleLowerCase("zh-CN");
+  if (!normalized) return [];
+  const db = await getDb(); if (!db) return [];
+  const rows = await db.select({ id: knowledgeDocuments.id, title: knowledgeDocuments.title, mimeType: knowledgeDocuments.mimeType, textPreview: knowledgeDocuments.textPreview, textContent: knowledgeDocuments.textContent, updatedAt: knowledgeDocuments.updatedAt }).from(knowledgeDocuments).where(eq(knowledgeDocuments.userId, userId)).orderBy(desc(knowledgeDocuments.updatedAt));
+  return rows.flatMap((row) => {
+    const contentHit = buildKnowledgeSearchHit(row.textContent ?? row.textPreview ?? "", normalized);
+    const titleHit = buildKnowledgeSearchHit(row.title, normalized);
+    const hit = contentHit ?? titleHit;
+    if (!hit) return [];
+    return [{ id: row.id, title: row.title, mimeType: row.mimeType, updatedAt: row.updatedAt, excerpt: contentHit ? hit.excerpt : (row.textPreview?.slice(0, 320) || row.title), matchOffset: contentHit ? hit.matchOffset : 0, matchLength: contentHit ? hit.matchLength : 0, matchIndex: contentHit ? hit.matchIndex : 0, matchIn: contentHit ? "content" as const : "title" as const, isLegacyPreview: row.textContent === null }];
+  });
 }
 
 export async function getKnowledgeDocumentCitations(userId: number, documentIds: number[]) {

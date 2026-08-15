@@ -1,4 +1,4 @@
-import { index, int, mysqlEnum, mysqlTable, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
+import { index, int, mediumtext, mysqlEnum, mysqlTable, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -297,6 +297,7 @@ export const knowledgeDocuments = mysqlTable("knowledge_documents", {
   storageKey: varchar("storageKey", { length: 1024 }).notNull().unique(),
   storageUrl: varchar("storageUrl", { length: 1024 }).notNull(),
   textPreview: text("textPreview"),
+  textContent: mediumtext("textContent"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 }, (table) => [
