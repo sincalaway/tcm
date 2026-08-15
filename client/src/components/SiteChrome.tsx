@@ -2,7 +2,7 @@
  * 宋刻书斋：导航借鉴古籍目录签，砚石青为结构色，辰砂红仅用于当前路径与关键提示。
  */
 import { Link, useLocation } from "wouter";
-import { BookOpenCheck, LogOut, Menu, Search, X } from "lucide-react";
+import { Bell, BookOpenCheck, LogOut, Menu, Search, Upload, X } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { startLogin } from "@/const";
@@ -47,7 +47,7 @@ export function SiteChrome({ children }: { children: React.ReactNode }) {
           </nav>
 
           <div className="header-utility" aria-label="项目定位">
-            {loading ? <span className="utility-mark">校验书签</span> : user ? <><Link href="/shuzhai" className="desk-entry"><BookOpenCheck size={15} />我的书案</Link><button className="header-logout" type="button" onClick={() => void logout()} aria-label="退出登录"><LogOut size={15} /></button></> : <button className="login-entry" type="button" onClick={() => startLogin()}>登录以记笔记</button>}
+            {loading ? <span className="utility-mark">校验书签</span> : user ? <><Link href="/notifications" className="notification-entry" aria-label="复习通知中心"><Bell size={15} /></Link><Link href="/knowledge" className="notification-entry" aria-label="个人知识库"><Upload size={15} /></Link><Link href="/shuzhai" className="desk-entry"><BookOpenCheck size={15} />我的书案</Link><button className="header-logout" type="button" onClick={() => void logout()} aria-label="退出登录"><LogOut size={15} /></button></> : <button className="login-entry" type="button" onClick={() => startLogin()}>登录以记笔记</button>}
             <button
               className="mobile-menu-button"
               type="button"
@@ -66,7 +66,7 @@ export function SiteChrome({ children }: { children: React.ReactNode }) {
                 {link.label}
               </Link>
             ))}
-            {user ? <Link href="/shuzhai" className="mobile-nav-link" onClick={() => setOpen(false)}><BookOpenCheck size={15} />我的书案</Link> : <button type="button" className="mobile-nav-link" onClick={() => startLogin()}>登录以记笔记</button>}
+            {user ? <><Link href="/notifications" className="mobile-nav-link" onClick={() => setOpen(false)}><Bell size={15} />通知中心</Link><Link href="/knowledge" className="mobile-nav-link" onClick={() => setOpen(false)}><Upload size={15} />个人知识库</Link><Link href="/shuzhai" className="mobile-nav-link" onClick={() => setOpen(false)}><BookOpenCheck size={15} />我的书案</Link></> : <button type="button" className="mobile-nav-link" onClick={() => startLogin()}>登录以记笔记</button>}
           </nav>
         )}
       </header>

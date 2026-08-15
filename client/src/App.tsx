@@ -16,6 +16,8 @@ const Formulas = lazy(() => import("./pages/Formulas"));
 const Classics = lazy(() => import("./pages/Classics"));
 const SearchPage = lazy(() => import("./pages/SearchPage"));
 const StudyDesk = lazy(() => import("./pages/StudyDesk"));
+const NotificationCenter = lazy(() => import("./pages/NotificationCenter"));
+const KnowledgeBase = lazy(() => import("./pages/KnowledgeBase"));
 const DashboardLayout = lazy(() => import("./components/DashboardLayout"));
 
 function RouteFallback() {
@@ -34,6 +36,8 @@ function Router() {
       <Route path="/jingfang"><RoutedPage><Formulas /></RoutedPage></Route>
       <Route path="/guji"><RoutedPage><Classics /></RoutedPage></Route>
       <Route path="/search"><RoutedPage><SearchPage /></RoutedPage></Route>
+      <Route path="/notifications"><RoutedPage><NotificationCenter /></RoutedPage></Route>
+      <Route path="/knowledge"><RoutedPage><KnowledgeBase /></RoutedPage></Route>
       <Route path="/shuzhai"><DashboardLayout><StudyDesk /></DashboardLayout></Route>
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />

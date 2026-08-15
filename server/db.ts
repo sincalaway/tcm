@@ -3,11 +3,13 @@ import { drizzle } from "drizzle-orm/mysql2";
 import {
   aiStudyConversations,
   aiStudyMessages,
+  aiStudySummaries,
   classicPassages,
   classicChapters,
   classics,
   contentSources,
   learningGoals,
+  knowledgeDocuments,
   formulaPassageMappings,
   formulas,
   herbs,
@@ -22,8 +24,11 @@ import {
 } from "../drizzle/schema";
 import { chapterSeed, classicSeed, formulaPassageSeed, formulaSeed, herbSeed, shangHanPassageSeed, sourceSeed } from "./catalogSeed";
 import { ENV } from "./_core/env";
+import { storageGetSignedUrl, storagePut } from "./storage";
 
 export type ResourceType = "herb" | "formula" | "classic" | "chapter";
+const KNOWLEDGE_ALLOWED_TYPES = new Set(["text/plain", "text/markdown", "application/pdf"]);
+const KNOWLEDGE_MAX_BYTES = 5 * 1024 * 1024;
 
 let _db: ReturnType<typeof drizzle> | null = null;
 let seedPromise: Promise<void> | null = null;
@@ -419,6 +424,30 @@ export async function listReviewReminders(userId: number) {
   return { reminders, pending };
 }
 
+export async function listReviewNotifications(userId: number, input: { status?: "all" | "unread" | "read"; from?: Date; to?: Date }) {
+  const db = await getDb(); if (!db) return [];
+  const events = await db.select({
+    id: reviewReminderEvents.id,
+    reminderId: reviewReminderEvents.reminderId,
+    dueAt: reviewReminderEvents.dueAt,
+    seenAt: reviewReminderEvents.seenAt,
+    createdAt: reviewReminderEvents.createdAt,
+    title: reviewReminders.title,
+    goalTitle: learningGoals.title,
+  }).from(reviewReminderEvents)
+    .innerJoin(reviewReminders, eq(reviewReminderEvents.reminderId, reviewReminders.id))
+    .leftJoin(learningGoals, eq(reviewReminders.goalId, learningGoals.id))
+    .where(eq(reviewReminderEvents.userId, userId))
+    .orderBy(desc(reviewReminderEvents.dueAt));
+  return events.filter((event) => {
+    if (input.status === "unread" && event.seenAt) return false;
+    if (input.status === "read" && !event.seenAt) return false;
+    if (input.from && event.dueAt < input.from) return false;
+    if (input.to && event.dueAt > input.to) return false;
+    return true;
+  });
+}
+
 export async function updateReviewReminder(userId: number, id: number, input: { title: string; intervalDays: number; hourUtc: number; enabled: boolean }) {
   const db = await getDb(); if (!db) throw new Error("数据库暂不可用");
   const existing = await getReviewReminder(userId, id); if (!existing) throw new Error("复习提醒不存在或无权访问");
@@ -468,8 +497,11 @@ export async function getAiStudyConversation(userId: number, id: number) {
   const db = await getDb(); if (!db) return undefined;
   const conversation = (await db.select().from(aiStudyConversations).where(and(eq(aiStudyConversations.id, id), eq(aiStudyConversations.userId, userId))).limit(1))[0];
   if (!conversation) return undefined;
-  const messages = await db.select().from(aiStudyMessages).where(eq(aiStudyMessages.conversationId, id)).orderBy(aiStudyMessages.createdAt);
-  return { conversation, messages };
+  const [messages, summary] = await Promise.all([
+    db.select().from(aiStudyMessages).where(eq(aiStudyMessages.conversationId, id)).orderBy(aiStudyMessages.createdAt),
+    db.select().from(aiStudySummaries).where(and(eq(aiStudySummaries.conversationId, id), eq(aiStudySummaries.userId, userId))).limit(1),
+  ]);
+  return { conversation, messages, summary: summary[0] ?? null };
 }
 
 export async function createAiStudyConversation(userId: number, input: { title: string; contextKind: AiConversationKind; contextTitle: string }) {
@@ -487,14 +519,74 @@ export async function appendAiStudyMessage(conversationId: number, role: "user" 
 export async function getRecentAiStudyMessages(userId: number, conversationId: number, limit = 8) {
   const conversation = await getAiStudyConversation(userId, conversationId);
   if (!conversation) return undefined;
-  return { conversation: conversation.conversation, messages: conversation.messages.slice(-limit) };
+  return { conversation: conversation.conversation, messages: conversation.messages.slice(-limit), summary: conversation.summary };
+}
+
+export async function saveAiStudySummary(userId: number, conversationId: number, content: string, sourceMessageCount: number) {
+  const db = await getDb(); if (!db) throw new Error("数据库暂不可用");
+  const conversation = await getAiStudyConversation(userId, conversationId); if (!conversation) throw new Error("对话不存在或无权访问");
+  await db.insert(aiStudySummaries).values({ conversationId, userId, content, sourceMessageCount }).onDuplicateKeyUpdate({ set: { content, sourceMessageCount, updatedAt: new Date() } });
+  return { conversationId, content, sourceMessageCount };
+}
+
+export async function searchAiStudyConversations(userId: number, query: string) {
+  const normalized = query.trim().toLocaleLowerCase("zh-CN");
+  if (!normalized) return [];
+  const db = await getDb(); if (!db) return [];
+  const conversations = await db.select().from(aiStudyConversations).where(eq(aiStudyConversations.userId, userId)).orderBy(desc(aiStudyConversations.updatedAt));
+  const details = await Promise.all(conversations.map((conversation) => getAiStudyConversation(userId, conversation.id)));
+  return details.flatMap((detail) => {
+    if (!detail) return [];
+    const candidates = [detail.conversation.title, detail.conversation.contextTitle, detail.summary?.content ?? "", ...detail.messages.map((message) => message.content)];
+    const matched = candidates.find((text) => text.toLocaleLowerCase("zh-CN").includes(normalized));
+    return matched ? [{ id: detail.conversation.id, title: detail.conversation.title, contextKind: detail.conversation.contextKind, contextTitle: detail.conversation.contextTitle, updatedAt: detail.conversation.updatedAt, matchedSnippet: matched.slice(0, 220), hasSummary: Boolean(detail.summary) }] : [];
+  });
 }
 
 export async function deleteAiStudyConversation(userId: number, id: number) {
   const db = await getDb(); if (!db) throw new Error("数据库暂不可用");
   const conversation = await getAiStudyConversation(userId, id); if (!conversation) throw new Error("对话不存在或无权访问");
   await db.delete(aiStudyMessages).where(eq(aiStudyMessages.conversationId, id));
+  await db.delete(aiStudySummaries).where(and(eq(aiStudySummaries.conversationId, id), eq(aiStudySummaries.userId, userId)));
   await db.delete(aiStudyConversations).where(and(eq(aiStudyConversations.id, id), eq(aiStudyConversations.userId, userId)));
+  return { success: true };
+}
+
+function normalizeKnowledgeFileName(fileName: string) {
+  const normalized = fileName.trim().replace(/[\\/:*?"<>|\u0000-\u001f]/g, "-").replace(/\s+/g, " ");
+  return normalized.slice(0, 180) || "knowledge-document";
+}
+
+export async function uploadKnowledgeDocument(userId: number, input: { fileName: string; mimeType: string; base64: string }) {
+  const db = await getDb(); if (!db) throw new Error("数据库暂不可用");
+  if (!KNOWLEDGE_ALLOWED_TYPES.has(input.mimeType)) throw new Error("仅支持 TXT、Markdown 或 PDF 文件");
+  const buffer = Buffer.from(input.base64, "base64");
+  if (!buffer.length || buffer.length > KNOWLEDGE_MAX_BYTES) throw new Error("文件必须小于或等于 5MB");
+  const title = normalizeKnowledgeFileName(input.fileName);
+  const { key, url } = await storagePut(`knowledge/${userId}/${Date.now()}-${title}`, buffer, input.mimeType);
+  const textPreview = input.mimeType === "text/plain" || input.mimeType === "text/markdown" ? buffer.toString("utf8").slice(0, 3000) : null;
+  const result = await db.insert(knowledgeDocuments).values({ userId, title, mimeType: input.mimeType, sizeBytes: buffer.length, storageKey: key, storageUrl: url, textPreview });
+  return { id: Number(result[0].insertId), title, mimeType: input.mimeType, sizeBytes: buffer.length };
+}
+
+export async function listKnowledgeDocuments(userId: number, query?: string) {
+  const db = await getDb(); if (!db) return [];
+  const rows = await db.select({ id: knowledgeDocuments.id, title: knowledgeDocuments.title, mimeType: knowledgeDocuments.mimeType, sizeBytes: knowledgeDocuments.sizeBytes, textPreview: knowledgeDocuments.textPreview, createdAt: knowledgeDocuments.createdAt, updatedAt: knowledgeDocuments.updatedAt }).from(knowledgeDocuments).where(eq(knowledgeDocuments.userId, userId)).orderBy(desc(knowledgeDocuments.updatedAt));
+  const normalized = query?.trim().toLocaleLowerCase("zh-CN");
+  return normalized ? rows.filter((row) => `${row.title}\n${row.textPreview ?? ""}`.toLocaleLowerCase("zh-CN").includes(normalized)) : rows;
+}
+
+export async function getKnowledgeDocumentDownload(userId: number, id: number) {
+  const db = await getDb(); if (!db) throw new Error("数据库暂不可用");
+  const row = (await db.select({ id: knowledgeDocuments.id, title: knowledgeDocuments.title, storageKey: knowledgeDocuments.storageKey }).from(knowledgeDocuments).where(and(eq(knowledgeDocuments.id, id), eq(knowledgeDocuments.userId, userId))).limit(1))[0];
+  if (!row) throw new Error("文档不存在或无权访问");
+  return { id: row.id, title: row.title, storageUrl: await storageGetSignedUrl(row.storageKey) };
+}
+
+export async function deleteKnowledgeDocument(userId: number, id: number) {
+  const db = await getDb(); if (!db) throw new Error("数据库暂不可用");
+  // 存储层不暴露删除端点；移除用户专属 key 和所有 UI 引用后，对象不再可寻址。
+  await db.delete(knowledgeDocuments).where(and(eq(knowledgeDocuments.id, id), eq(knowledgeDocuments.userId, userId)));
   return { success: true };
 }
 
