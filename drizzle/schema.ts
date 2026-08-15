@@ -132,6 +132,24 @@ export const classicPassages = mysqlTable("classic_passages", {
   index("classic_passage_title_idx").on(table.title),
 ]);
 
+/** Version and variant witnesses attached to a primary-text passage. */
+export const classicPassageVersions = mysqlTable("classic_passage_versions", {
+  id: int("id").autoincrement().primaryKey(),
+  passageId: int("passageId").notNull(),
+  editionLabel: varchar("editionLabel", { length: 255 }).notNull(),
+  text: text("text").notNull(),
+  variantNote: text("variantNote"),
+  verificationStatus: mysqlEnum("verificationStatus", ["verified", "pending", "reference_only"]).notNull().default("pending"),
+  sourceReference: varchar("sourceReference", { length: 255 }).notNull(),
+  sourceUrl: varchar("sourceUrl", { length: 1024 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+  uniqueIndex("classic_passage_version_unique").on(table.passageId, table.editionLabel),
+  index("classic_passage_versions_passage_idx").on(table.passageId),
+  index("classic_passage_versions_status_idx").on(table.verificationStatus),
+]);
+
 /** Exact editorial links between a formula and its supporting primary-text passages. */
 export const formulaPassageMappings = mysqlTable("formula_passage_mappings", {
   id: int("id").autoincrement().primaryKey(),

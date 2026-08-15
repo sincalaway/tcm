@@ -5,6 +5,7 @@ import {
   aiStudyMessages,
   aiStudySummaries,
   classicPassages,
+  classicPassageVersions,
   classicChapters,
   classics,
   contentSources,
@@ -22,7 +23,7 @@ import {
   studyNotes,
   users,
 } from "../drizzle/schema";
-import { chapterSeed, classicSeed, formulaPassageSeed, formulaSeed, herbSeed, shangHanPassageSeed, sourceSeed } from "./catalogSeed";
+import { chapterSeed, classicSeed, formulaPassageSeed, formulaSeed, herbSeed, passageVersionSeed, shangHanPassageSeed, sourceSeed } from "./catalogSeed";
 import { ENV } from "./_core/env";
 import { storageGetSignedUrl, storagePut } from "./storage";
 import { extractText } from "unpdf";
@@ -122,6 +123,12 @@ async function seedCatalog() {
     return formulaId && passageId ? [{ formulaId, passageId, relationType, studyNote }] : [];
   });
   if (mappingRows.length) await db.insert(formulaPassageMappings).values(mappingRows).onDuplicateKeyUpdate({ set: { updatedAt: new Date() } });
+  const versionRows = passageVersionSeed.flatMap(([chapterTitle, passageNumber, editionLabel, text, variantNote, verificationStatus, sourceReference, sourceUrl]) => {
+    const chapterId = shangHanChapterIds.get(chapterTitle);
+    const passageId = chapterId ? passageIds.get(`${chapterId}:${passageNumber}`) : undefined;
+    return passageId ? [{ passageId, editionLabel, text, variantNote, verificationStatus, sourceReference, sourceUrl }] : [];
+  });
+  if (versionRows.length) await db.insert(classicPassageVersions).values(versionRows).onDuplicateKeyUpdate({ set: { updatedAt: new Date() } });
 }
 
 function includesQuery(query: string, columns: Parameters<typeof or>[0][]) {
@@ -194,6 +201,15 @@ export async function getClassicPassages(chapterId: number) {
   const db = await getDb();
   if (!db) return [];
   return db.select().from(classicPassages).where(eq(classicPassages.chapterId, chapterId)).orderBy(classicPassages.passageNumber);
+}
+
+export async function getPassageVersions(passageId: number) {
+  await ensureCatalogSeed();
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(classicPassageVersions)
+    .where(eq(classicPassageVersions.passageId, passageId))
+    .orderBy(classicPassageVersions.editionLabel);
 }
 
 export async function getFormulaPassages(formulaId: number) {

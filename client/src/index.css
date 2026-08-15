@@ -213,3 +213,47 @@ h1, h2, h3 { font-family: "Noto Serif SC", serif; color: var(--ink); letter-spac
 .citation-actions a, .citation-actions button { border: 1px solid var(--line); padding: .36rem .5rem; color: var(--ink); background: transparent; font-size: .63rem; white-space: nowrap; }
 .citation-actions a:hover, .citation-actions button:hover { border-color: var(--cinnabar); color: var(--cinnabar); }
 @media (max-width: 480px) { .passage-citation { grid-template-columns: 1fr; }.citation-actions { flex-wrap: wrap; }.citation-actions a, .citation-actions button { flex: 1; text-align: center; } }
+
+/* 版本异文与引用导出 */
+.passage-versions { margin-top: 1.2rem; padding-top: .85rem; border-top: 1px solid var(--line); }
+.passage-versions-heading { display: flex; align-items: end; justify-content: space-between; gap: 1rem; }
+.passage-versions-heading h3 { margin: .25rem 0 0; font-size: 1.15rem; }
+.passage-versions-heading > small { max-width: 190px; color: var(--ink-soft); font-size: .64rem; text-align: right; }
+.passage-version-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .7rem; margin-top: .7rem; }
+.passage-version-card { padding: .75rem; border: 1px solid var(--line); background: rgba(255,255,255,.28); }
+.passage-version-card header { display: flex; align-items: start; justify-content: space-between; gap: .5rem; }
+.passage-version-card header b { font-family: "Noto Serif SC", serif; font-size: .78rem; line-height: 1.45; }
+.passage-version-card p { margin: .55rem 0; color: var(--ink); font-family: "Noto Serif SC", serif; font-size: .76rem; line-height: 1.8; }
+.passage-version-card > small { display: block; color: var(--ink-soft); font-size: .66rem; line-height: 1.65; }
+.passage-version-card > a { display: inline-flex; align-items: center; gap: .3rem; margin-top: .55rem; color: var(--cinnabar); font-size: .65rem; }
+.verification-badge { flex: 0 0 auto; padding: .12rem .32rem; border: 1px solid var(--line); color: var(--ink-soft); font-size: .58rem; }
+.verification-badge.verified { border-color: var(--moss); color: var(--moss); }
+.verification-badge.reference_only { border-color: rgba(165,58,44,.4); color: var(--cinnabar); }
+
+@media (max-width: 680px) {
+  .passage-versions-heading { align-items: start; flex-direction: column; gap: .35rem; }
+  .passage-versions-heading > small { max-width: none; text-align: left; }
+  .passage-version-grid { grid-template-columns: 1fr; }
+}
+
+@media print {
+  @page { size: A4; margin: 15mm 14mm; }
+  body { color: #111; background: #fff; font-size: 11pt; }
+  .site-header, .site-footer, .page-masthead, .catalog-controls, .archive-spine, .source-search, .progress-actions, .external-source, .study-margin, .ai-study-assistant, .citation-actions, .chapter-block { display: none !important; }
+  .inner-page { max-width: none; padding: 0; }
+  .archive-layout { display: block; margin: 0; border: 0; }
+  .classic-leaf { display: block; padding: 0; background: #fff; box-shadow: none; }
+  .classic-leaf::before, .classic-leaf::after, .paper-noise::after { display: none; }
+  .leaf-head { color: #555; }
+  .leaf-title h2 { font-size: 25pt; }
+  .classic-summary, .passage-block blockquote, .passage-version-card p { color: #111; }
+  .passage-block { padding: 0; border-left: 0; background: #fff; }
+  .passage-list { display: block; }
+  .passage-select { display: block; padding: .3rem 0; border: 0; background: #fff; color: #111; }
+  .passage-select span { margin-right: .5rem; }
+  .passage-citation { border-top: 1px solid #999; }
+  .passage-versions { break-inside: avoid; }
+  .passage-version-grid { grid-template-columns: 1fr 1fr; }
+  .passage-version-card { border-color: #aaa; background: #fff; }
+  a { color: #111; text-decoration: none; }
+}

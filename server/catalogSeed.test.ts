@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classicSeed, formulaPassageSeed, formulaSeed, herbSeed, shangHanPassageSeed, sourceSeed } from "./catalogSeed";
+import { classicSeed, formulaPassageSeed, formulaSeed, herbSeed, passageVersionSeed, shangHanPassageSeed, sourceSeed } from "./catalogSeed";
 
 const expectedFormulaSources: Record<string, string> = {
   "《伤寒论》": "https://zh.wikisource.org/wiki/%E5%82%B7%E5%AF%92%E8%AB%96",
@@ -72,6 +72,22 @@ describe("source-backed starter catalog", () => {
     for (const formulaSlug of shangHanFormulaSlugs) {
       expect(formulaPassageSeed.some((mapping) => mapping[0] === formulaSlug), `${formulaSlug} 应关联至少一条《伤寒论》条文`).toBe(true);
       expect(formulaPassageSeed.some((mapping) => mapping[0] === formulaSlug && mapping[3] === "primary"), `${formulaSlug} 应存在默认直达条文`).toBe(true);
+    }
+  });
+
+  it("keeps version comparison records traceable and explicitly status-labeled", () => {
+    const keys = passageVersionSeed.map((version) => `${version[0]}:${version[1]}:${version[2]}`);
+    expect(new Set(keys).size).toBe(keys.length);
+    expect(passageVersionSeed.length).toBeGreaterThanOrEqual(4);
+    for (const [chapterTitle, passageNumber, editionLabel, text, variantNote, status, sourceReference, sourceUrl] of passageVersionSeed) {
+      expect(chapterTitle).toMatch(/辨/);
+      expect(passageNumber).toBeGreaterThan(0);
+      expect(editionLabel).toBeTruthy();
+      expect(text).toBeTruthy();
+      expect(variantNote).toBeTruthy();
+      expect(["verified", "pending", "reference_only"]).toContain(status);
+      expect(sourceReference).toBeTruthy();
+      expect(sourceUrl).toMatch(/^https:\/\//);
     }
   });
 

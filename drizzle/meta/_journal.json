@@ -36,6 +36,13 @@
       "when": 1786781816714,
       "tag": "0004_magical_toro",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1786784164547,
+      "tag": "0005_fresh_tigra",
+      "breakpoints": true
     }
   ]
 }
