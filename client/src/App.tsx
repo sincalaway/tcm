@@ -3,18 +3,24 @@
  */
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { lazy, Suspense } from "react";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { SiteChrome } from "./components/SiteChrome";
 import { ThemeProvider } from "./contexts/ThemeContext";
-import Classics from "./pages/Classics";
-import DashboardLayout from "./components/DashboardLayout";
-import Formulas from "./pages/Formulas";
-import Herbs from "./pages/Herbs";
-import Home from "./pages/Home";
 import NotFound from "./pages/NotFound";
-import SearchPage from "./pages/SearchPage";
-import StudyDesk from "./pages/StudyDesk";
+
+const Home = lazy(() => import("./pages/Home"));
+const Herbs = lazy(() => import("./pages/Herbs"));
+const Formulas = lazy(() => import("./pages/Formulas"));
+const Classics = lazy(() => import("./pages/Classics"));
+const SearchPage = lazy(() => import("./pages/SearchPage"));
+const StudyDesk = lazy(() => import("./pages/StudyDesk"));
+const DashboardLayout = lazy(() => import("./components/DashboardLayout"));
+
+function RouteFallback() {
+  return <main className="route-loading" aria-live="polite">正在展开书页……</main>;
+}
 
 function RoutedPage({ children }: { children: React.ReactNode }) {
   return <SiteChrome>{children}</SiteChrome>;
@@ -22,7 +28,7 @@ function RoutedPage({ children }: { children: React.ReactNode }) {
 function Router() {
   // make sure to consider if you need authentication for certain routes
   return (
-    <Switch>
+    <Suspense fallback={<RouteFallback />}><Switch>
       <Route path="/"><RoutedPage><Home /></RoutedPage></Route>
       <Route path="/bencao"><RoutedPage><Herbs /></RoutedPage></Route>
       <Route path="/jingfang"><RoutedPage><Formulas /></RoutedPage></Route>
@@ -31,7 +37,7 @@ function Router() {
       <Route path="/shuzhai"><DashboardLayout><StudyDesk /></DashboardLayout></Route>
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
-    </Switch>
+    </Switch></Suspense>
   );
 }
 

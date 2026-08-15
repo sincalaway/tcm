@@ -19,6 +19,9 @@ export type ResourceType = "herb" | "formula" | "classic" | "chapter";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 let seedPromise: Promise<void> | null = null;
+let catalogFiltersCache: { expiresAt: number; value: Awaited<ReturnType<typeof buildCatalogFilters>> } | null = null;
+type WikisourceSearchResult = { pageId: number; title: string; timestamp: string; snippet: string; sourceUrl: string };
+const wikisourceSearchCache = new Map<string, { expiresAt: number; results: WikisourceSearchResult[] }>();
 
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
@@ -70,35 +73,23 @@ export async function ensureCatalogSeed() {
 async function seedCatalog() {
   const db = await getDb();
   if (!db) return;
-  for (const source of sourceSeed) {
-    await db.insert(contentSources).values(source).onDuplicateKeyUpdate({ set: { name: source.name, publisher: source.publisher, baseUrl: source.baseUrl, accessType: source.accessType, licenseNote: source.licenseNote } });
-  }
+  // 首次部署时采用批量写入；后续请求走唯一键的轻量 no-op，不再产生数十次串行往返。
+  await db.insert(contentSources).values(sourceSeed).onDuplicateKeyUpdate({ set: { updatedAt: new Date() } });
   const allSources = await db.select().from(contentSources);
   const sourceIds = new Map(allSources.map((source) => [source.slug, source.id]));
   const pharmacopoeiaId = sourceIds.get("chinese-pharmacopoeia");
   const wikisourceId = sourceIds.get("zh-wikisource");
   const chineseTextProjectId = sourceIds.get("chinese-text-project");
-  for (const record of herbSeed) {
-    const [slug, name, pinyin, aliases, category, nature, taste, meridians, medicinalPart, traditionalIndex, learningNote] = record;
-    await db.insert(herbs).values({ slug, name, pinyin, aliases, category, nature, taste, meridians, medicinalPart, traditionalIndex, learningNote, sourceId: pharmacopoeiaId, sourceUrl: "https://ydz.chp.org.cn/" }).onDuplicateKeyUpdate({ set: { name, pinyin, aliases, category, nature, taste, meridians, medicinalPart, traditionalIndex, learningNote, sourceId: pharmacopoeiaId, sourceUrl: "https://ydz.chp.org.cn/", reviewedAt: new Date() } });
-  }
-  for (const record of formulaSeed) {
-    const [slug, name, aliases, sourceTitle, sourceExcerpt, ingredients, structuralNote, studyIndex, sourceUrl] = record;
-    const formulaSourceId = sourceUrl.includes("ctext.org") ? chineseTextProjectId : wikisourceId;
-    await db.insert(formulas).values({ slug, name, aliases, sourceTitle, sourceExcerpt, ingredients: JSON.stringify(ingredients), structuralNote, studyIndex, sourceId: formulaSourceId, sourceUrl }).onDuplicateKeyUpdate({ set: { name, aliases, sourceTitle, sourceExcerpt, ingredients: JSON.stringify(ingredients), structuralNote, studyIndex, sourceId: formulaSourceId, sourceUrl, reviewedAt: new Date() } });
-  }
-  for (const record of classicSeed) {
-    const [slug, title, era, author, category, summary, sourceUrl] = record;
-    await db.insert(classics).values({ slug, title, era, author, category, summary, sourceId: wikisourceId, sourceUrl }).onDuplicateKeyUpdate({ set: { title, era, author, category, summary, sourceId: wikisourceId, sourceUrl, reviewedAt: new Date() } });
-  }
+  await db.insert(herbs).values(herbSeed.map(([slug, name, pinyin, aliases, category, nature, taste, meridians, medicinalPart, traditionalIndex, learningNote]) => ({ slug, name, pinyin, aliases, category, nature, taste, meridians, medicinalPart, traditionalIndex, learningNote, sourceId: pharmacopoeiaId, sourceUrl: "https://ydz.chp.org.cn/" }))).onDuplicateKeyUpdate({ set: { updatedAt: new Date() } });
+  await db.insert(formulas).values(formulaSeed.map(([slug, name, aliases, sourceTitle, sourceExcerpt, ingredients, structuralNote, studyIndex, sourceUrl]) => ({ slug, name, aliases, sourceTitle, sourceExcerpt, ingredients: JSON.stringify(ingredients), structuralNote, studyIndex, sourceId: sourceUrl.includes("ctext.org") ? chineseTextProjectId : wikisourceId, sourceUrl }))).onDuplicateKeyUpdate({ set: { updatedAt: new Date() } });
+  await db.insert(classics).values(classicSeed.map(([slug, title, era, author, category, summary, sourceUrl]) => ({ slug, title, era, author, category, summary, sourceId: wikisourceId, sourceUrl }))).onDuplicateKeyUpdate({ set: { updatedAt: new Date() } });
   const allClassics = await db.select().from(classics);
   const classicIds = new Map(allClassics.map((classic) => [classic.slug, classic.id]));
-  for (const record of chapterSeed) {
-    const [classicSlug, sequence, title, excerpt, sourceUrl] = record;
+  const chapterRows = chapterSeed.flatMap(([classicSlug, sequence, title, excerpt, sourceUrl]) => {
     const classicId = classicIds.get(classicSlug);
-    if (!classicId) continue;
-    await db.insert(classicChapters).values({ classicId, sequence, title, excerpt, sourceUrl }).onDuplicateKeyUpdate({ set: { title, excerpt, sourceUrl } });
-  }
+    return classicId ? [{ classicId, sequence, title, excerpt, sourceUrl }] : [];
+  });
+  if (chapterRows.length) await db.insert(classicChapters).values(chapterRows).onDuplicateKeyUpdate({ set: { updatedAt: new Date() } });
 }
 
 function includesQuery(query: string, columns: Parameters<typeof or>[0][]) {
@@ -108,6 +99,13 @@ function includesQuery(query: string, columns: Parameters<typeof or>[0][]) {
 
 export async function getCatalogFilters() {
   await ensureCatalogSeed();
+  if (catalogFiltersCache && catalogFiltersCache.expiresAt > Date.now()) return catalogFiltersCache.value;
+  const value = await buildCatalogFilters();
+  catalogFiltersCache = { value, expiresAt: Date.now() + 5 * 60 * 1000 };
+  return value;
+}
+
+async function buildCatalogFilters() {
   const db = await getDb();
   if (!db) return { herbCategories: [], natures: [], meridians: [], formulaSources: [], classicCategories: [] };
   const [herbRows, formulaRows, classicRows] = await Promise.all([db.select({ category: herbs.category, nature: herbs.nature, meridians: herbs.meridians }).from(herbs), db.select({ sourceTitle: formulas.sourceTitle }).from(formulas), db.select({ category: classics.category }).from(classics)]);
@@ -165,12 +163,26 @@ export async function getLocalSearch(query: string) {
 }
 
 export async function searchWikisource(query: string) {
+  const normalizedQuery = query.trim();
+  const cached = wikisourceSearchCache.get(normalizedQuery);
+  if (cached && cached.expiresAt > Date.now()) return cached.results;
   const endpoint = new URL("https://zh.wikisource.org/w/api.php");
-  endpoint.searchParams.set("action", "query"); endpoint.searchParams.set("list", "search"); endpoint.searchParams.set("srsearch", query); endpoint.searchParams.set("srlimit", "8"); endpoint.searchParams.set("format", "json"); endpoint.searchParams.set("origin", "*");
-  const response = await fetch(endpoint, { headers: { "User-Agent": "TCMClassicsLearningIndex/1.0 (public learning search)" } });
-  if (!response.ok) throw new Error("古籍公开检索暂时不可用，请稍后重试。");
-  const payload = await response.json() as { query?: { search?: Array<{ pageid: number; title: string; timestamp: string; snippet: string }> } };
-  return (payload.query?.search ?? []).map((item) => ({ pageId: item.pageid, title: item.title, timestamp: item.timestamp, snippet: item.snippet.replace(/<[^>]*>/g, "").replace(/&quot;/g, "\"").replace(/&amp;/g, "&"), sourceUrl: `https://zh.wikisource.org/wiki/${encodeURIComponent(item.title)}` }));
+  endpoint.searchParams.set("action", "query"); endpoint.searchParams.set("list", "search"); endpoint.searchParams.set("srsearch", normalizedQuery); endpoint.searchParams.set("srlimit", "8"); endpoint.searchParams.set("format", "json"); endpoint.searchParams.set("origin", "*");
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8_000);
+  try {
+    const response = await fetch(endpoint, { headers: { "User-Agent": "TCMClassicsLearningIndex/1.0 (public learning search)" }, signal: controller.signal });
+    if (!response.ok) throw new Error("古籍公开检索暂时不可用，请稍后重试。");
+    const payload = await response.json() as { query?: { search?: Array<{ pageid: number; title: string; timestamp: string; snippet: string }> } };
+    const results = (payload.query?.search ?? []).map((item) => ({ pageId: item.pageid, title: item.title, timestamp: item.timestamp, snippet: item.snippet.replace(/<[^>]*>/g, "").replace(/&quot;/g, "\"").replace(/&amp;/g, "&"), sourceUrl: `https://zh.wikisource.org/wiki/${encodeURIComponent(item.title)}` }));
+    wikisourceSearchCache.set(normalizedQuery, { results, expiresAt: Date.now() + 10 * 60 * 1000 });
+    return results;
+  } catch (error) {
+    if (controller.signal.aborted) throw new Error("公开原文检索响应较慢，请稍后重试。");
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export async function listSavedItems(userId: number) {
