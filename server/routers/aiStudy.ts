@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { appendAiStudyMessage, createAiStudyConversation, deleteAiStudyConversation, getAiStudyConversation, getRecentAiStudyMessages, listAiStudyConversations, saveAiStudySummary, searchAiStudyConversations } from "../db";
+import { appendAiStudyMessage, createAiStudyConversation, deleteAiStudyConversation, getAiStudyConversation, getKnowledgeDocumentCitations, getRecentAiStudyMessages, listAiStudyConversations, saveAiStudySummary, searchAiStudyConversations } from "../db";
 import { ENV } from "../_core/env";
 import { invokeLLM, listLLMModels } from "../_core/llm";
 import { protectedProcedure, router } from "../_core/trpc";
@@ -86,15 +86,17 @@ export const aiStudyRouter = router({
       return { ...result, summary };
     }),
   }),
-  explain: protectedProcedure.input(z.object({ context: contextSchema, question: z.string().trim().min(1).max(600), provider: providerSchema.default("auto"), conversationId: z.number().int().positive().optional() })).mutation(async ({ ctx, input }) => {
+  explain: protectedProcedure.input(z.object({ context: contextSchema, question: z.string().trim().min(1).max(600), provider: providerSchema.default("auto"), conversationId: z.number().int().positive().optional(), knowledgeDocumentIds: z.array(z.number().int().positive()).max(3).optional() })).mutation(async ({ ctx, input }) => {
     const kind = toConversationKind(input.context.kind);
     const existing = input.conversationId ? await getRecentAiStudyMessages(ctx.user.id, input.conversationId, 8) : undefined;
     if (input.conversationId && !existing) throw new Error("对话不存在或无权访问");
     if (existing && (existing.conversation.contextKind !== kind || existing.conversation.contextTitle !== input.context.title)) throw new Error("该历史对话不属于当前学习条目");
     const conversationId = existing?.conversation.id ?? (await createAiStudyConversation(ctx.user.id, { title: input.context.title, contextKind: kind, contextTitle: input.context.title })).id;
     const history: StudyMessage[] = (existing?.messages ?? []).map((message) => ({ role: message.role, content: message.content.slice(0, 1800) }));
+    const citations = await getKnowledgeDocumentCitations(ctx.user.id, input.knowledgeDocumentIds ?? []);
+    const knowledgeContext = citations.length ? `\n\n用户明确选择的个人知识库摘录（仅可引用其中给出的内容，并在相关句后以《资料名》标注）：\n${citations.map((citation) => `《${citation.title}》：${citation.excerpt}`).join("\n\n")}` : "";
     const messages: StudyMessage[] = [
-      { role: "system", content: `${assistantGuardrail}\n\n当前固定学习上下文：\n- 类型：${input.context.kind}\n- 标题：${input.context.title}\n- 来源：${input.context.sourceTitle ?? "未提供"}\n- 摘录：${input.context.excerpt ?? "未提供"}\n- 研读提示：${input.context.studyNote ?? "未提供"}\n\n仅将下列最近历史视为上下文；若历史未足以确认事实，请明确说明。` },
+      { role: "system", content: `${assistantGuardrail}\n\n当前固定学习上下文：\n- 类型：${input.context.kind}\n- 标题：${input.context.title}\n- 来源：${input.context.sourceTitle ?? "未提供"}\n- 摘录：${input.context.excerpt ?? "未提供"}\n- 研读提示：${input.context.studyNote ?? "未提供"}${knowledgeContext}\n\n仅将下列最近历史视为上下文；若历史未足以确认事实，请明确说明。` },
       ...(existing?.summary?.content ? [{ role: "system" as const, content: `本会话的既有学习摘要（仅作连续性线索，原典事实仍须以当前资料核对）：\n${existing.summary.content.slice(0, 3500)}` }] : []),
       ...history,
       { role: "user", content: input.question },

@@ -6,6 +6,7 @@ import { Bell, BookOpenCheck, LogOut, Menu, Search, Upload, X } from "lucide-rea
 import { useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { startLogin } from "@/const";
+import { trpc } from "@/lib/trpc";
 
 const sealMark = "/manus-storage/tcm-seal-leaf-mark_31399890.png";
 
@@ -21,6 +22,8 @@ export function SiteChrome({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const [open, setOpen] = useState(false);
   const { user, loading, logout } = useAuth();
+  const unreadNotifications = trpc.study.notifications.list.useQuery({ status: "unread" }, { enabled: Boolean(user) });
+  const unreadCount = unreadNotifications.data?.length ?? 0;
 
   return (
     <div className="site-shell">
@@ -47,7 +50,7 @@ export function SiteChrome({ children }: { children: React.ReactNode }) {
           </nav>
 
           <div className="header-utility" aria-label="项目定位">
-            {loading ? <span className="utility-mark">校验书签</span> : user ? <><Link href="/notifications" className="notification-entry" aria-label="复习通知中心"><Bell size={15} /></Link><Link href="/knowledge" className="notification-entry" aria-label="个人知识库"><Upload size={15} /></Link><Link href="/shuzhai" className="desk-entry"><BookOpenCheck size={15} />我的书案</Link><button className="header-logout" type="button" onClick={() => void logout()} aria-label="退出登录"><LogOut size={15} /></button></> : <button className="login-entry" type="button" onClick={() => startLogin()}>登录以记笔记</button>}
+            {loading ? <span className="utility-mark">校验书签</span> : user ? <><Link href="/notifications" className="notification-entry" aria-label={`复习通知中心，${unreadCount} 则待阅`}><Bell size={15} />{unreadCount ? <b>{unreadCount > 99 ? "99+" : unreadCount}</b> : null}</Link><Link href="/knowledge" className="notification-entry" aria-label="个人知识库"><Upload size={15} /></Link><Link href="/shuzhai" className="desk-entry"><BookOpenCheck size={15} />我的书案</Link><button className="header-logout" type="button" onClick={() => void logout()} aria-label="退出登录"><LogOut size={15} /></button></> : <button className="login-entry" type="button" onClick={() => startLogin()}>登录以记笔记</button>}
             <button
               className="mobile-menu-button"
               type="button"
