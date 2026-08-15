@@ -25,6 +25,7 @@ import {
 import { chapterSeed, classicSeed, formulaPassageSeed, formulaSeed, herbSeed, shangHanPassageSeed, sourceSeed } from "./catalogSeed";
 import { ENV } from "./_core/env";
 import { storageGetSignedUrl, storagePut } from "./storage";
+import { extractText } from "unpdf";
 
 export type ResourceType = "herb" | "formula" | "classic" | "chapter";
 const KNOWLEDGE_ALLOWED_TYPES = new Set(["text/plain", "text/markdown", "application/pdf"]);
@@ -469,6 +470,12 @@ export async function markReviewReminderSeen(userId: number, eventId: number) {
   return { success: true };
 }
 
+export async function markAllReviewRemindersSeen(userId: number) {
+  const db = await getDb(); if (!db) throw new Error("数据库暂不可用");
+  await db.update(reviewReminderEvents).set({ seenAt: new Date() }).where(and(eq(reviewReminderEvents.userId, userId), isNull(reviewReminderEvents.seenAt)));
+  return { success: true };
+}
+
 export async function triggerReviewReminderByTaskUid(taskUid: string) {
   const db = await getDb(); if (!db) throw new Error("数据库暂不可用");
   const rows = await db.select().from(reviewReminders).where(eq(reviewReminders.scheduleCronTaskUid, taskUid)).limit(1);
@@ -564,7 +571,11 @@ export async function uploadKnowledgeDocument(userId: number, input: { fileName:
   if (!buffer.length || buffer.length > KNOWLEDGE_MAX_BYTES) throw new Error("文件必须小于或等于 5MB");
   const title = normalizeKnowledgeFileName(input.fileName);
   const { key, url } = await storagePut(`knowledge/${userId}/${Date.now()}-${title}`, buffer, input.mimeType);
-  const textPreview = input.mimeType === "text/plain" || input.mimeType === "text/markdown" ? buffer.toString("utf8").slice(0, 3000) : null;
+  let textPreview: string | null = null;
+  if (input.mimeType === "text/plain" || input.mimeType === "text/markdown") textPreview = buffer.toString("utf8").slice(0, 6000);
+  if (input.mimeType === "application/pdf") {
+    try { const extracted = await extractText(new Uint8Array(buffer), { mergePages: true }); textPreview = extracted.text.replace(/\s+/g, " ").trim().slice(0, 6000) || null; } catch { textPreview = null; }
+  }
   const result = await db.insert(knowledgeDocuments).values({ userId, title, mimeType: input.mimeType, sizeBytes: buffer.length, storageKey: key, storageUrl: url, textPreview });
   return { id: Number(result[0].insertId), title, mimeType: input.mimeType, sizeBytes: buffer.length };
 }
@@ -574,6 +585,12 @@ export async function listKnowledgeDocuments(userId: number, query?: string) {
   const rows = await db.select({ id: knowledgeDocuments.id, title: knowledgeDocuments.title, mimeType: knowledgeDocuments.mimeType, sizeBytes: knowledgeDocuments.sizeBytes, textPreview: knowledgeDocuments.textPreview, createdAt: knowledgeDocuments.createdAt, updatedAt: knowledgeDocuments.updatedAt }).from(knowledgeDocuments).where(eq(knowledgeDocuments.userId, userId)).orderBy(desc(knowledgeDocuments.updatedAt));
   const normalized = query?.trim().toLocaleLowerCase("zh-CN");
   return normalized ? rows.filter((row) => `${row.title}\n${row.textPreview ?? ""}`.toLocaleLowerCase("zh-CN").includes(normalized)) : rows;
+}
+
+export async function getKnowledgeDocumentCitations(userId: number, documentIds: number[]) {
+  const db = await getDb(); if (!db || !documentIds.length) return [];
+  const rows = await db.select({ id: knowledgeDocuments.id, title: knowledgeDocuments.title, textPreview: knowledgeDocuments.textPreview }).from(knowledgeDocuments).where(eq(knowledgeDocuments.userId, userId));
+  return rows.filter((row) => documentIds.includes(row.id) && row.textPreview).slice(0, 3).map((row) => ({ id: row.id, title: row.title, excerpt: row.textPreview!.slice(0, 2400) }));
 }
 
 export async function getKnowledgeDocumentDownload(userId: number, id: number) {

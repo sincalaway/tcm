@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TrpcContext } from "./_core/context";
 
-const dbMock = vi.hoisted(() => ({ appendAiStudyMessage: vi.fn(), createAiStudyConversation: vi.fn(), deleteAiStudyConversation: vi.fn(), getAiStudyConversation: vi.fn(), getRecentAiStudyMessages: vi.fn(), listAiStudyConversations: vi.fn(), saveAiStudySummary: vi.fn(), searchAiStudyConversations: vi.fn() }));
+const dbMock = vi.hoisted(() => ({ appendAiStudyMessage: vi.fn(), createAiStudyConversation: vi.fn(), deleteAiStudyConversation: vi.fn(), getAiStudyConversation: vi.fn(), getKnowledgeDocumentCitations: vi.fn(), getRecentAiStudyMessages: vi.fn(), listAiStudyConversations: vi.fn(), saveAiStudySummary: vi.fn(), searchAiStudyConversations: vi.fn() }));
 const llmMock = vi.hoisted(() => ({ invokeLLM: vi.fn(), listLLMModels: vi.fn() }));
 vi.mock("./db", () => dbMock);
 vi.mock("./_core/llm", () => llmMock);
@@ -25,7 +25,7 @@ describe("AI 学习助手提供方配置", () => {
   });
 
   it("创建个人会话，并将上下文窗口限制为最近八条消息", async () => {
-    dbMock.getRecentAiStudyMessages.mockResolvedValue(undefined); dbMock.createAiStudyConversation.mockResolvedValue({ id: 12 }); dbMock.appendAiStudyMessage.mockResolvedValue(undefined);
+    dbMock.getRecentAiStudyMessages.mockResolvedValue(undefined); dbMock.getKnowledgeDocumentCitations.mockResolvedValue([]); dbMock.createAiStudyConversation.mockResolvedValue({ id: 12 }); dbMock.appendAiStudyMessage.mockResolvedValue(undefined);
     llmMock.listLLMModels.mockResolvedValue({ data: [{ id: "gpt-5-mini" }] }); llmMock.invokeLLM.mockResolvedValue({ choices: [{ message: { content: "学习性说明" } }] });
     const caller = aiStudyRouter.createCaller(createContext());
     await expect(caller.explain({ context: { kind: "经方", title: "麻黄汤" }, question: "请说明学习线索", provider: "builtin" })).resolves.toMatchObject({ conversationId: 12, answer: "学习性说明" });

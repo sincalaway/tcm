@@ -2,7 +2,7 @@ import { z } from "zod";
 import { parse as parseCookie } from "cookie";
 import { COOKIE_NAME } from "@shared/const";
 import { createHeartbeatJob, deleteHeartbeatJob, updateHeartbeatJob } from "../_core/heartbeat";
-import { archiveLearningGoal, attachReviewReminderSchedule, createLearningGoal, createReviewReminder, deleteKnowledgeDocument, deleteReviewReminder, getKnowledgeDocumentDownload, getLearningOverview, getReviewReminder, getStudyDesk, listKnowledgeDocuments, listLearningGoals, listReviewNotifications, listReviewReminders, listSavedItems, listStudyNotes, markReviewReminderSeen, setReadingProgress, toggleLearningPathStep, toggleSavedItem, updateLearningGoal, updateReviewReminder, updateStudyNote, createStudyNote, deleteStudyNote, uploadKnowledgeDocument } from "../db";
+import { archiveLearningGoal, attachReviewReminderSchedule, createLearningGoal, createReviewReminder, deleteKnowledgeDocument, deleteReviewReminder, getKnowledgeDocumentDownload, getLearningOverview, getReviewReminder, getStudyDesk, listKnowledgeDocuments, listLearningGoals, listReviewNotifications, listReviewReminders, listSavedItems, listStudyNotes, markAllReviewRemindersSeen, markReviewReminderSeen, setReadingProgress, toggleLearningPathStep, toggleSavedItem, updateLearningGoal, updateReviewReminder, updateStudyNote, createStudyNote, deleteStudyNote, uploadKnowledgeDocument } from "../db";
 import { protectedProcedure, router } from "../_core/trpc";
 
 const resourceInput = z.object({ resourceType: z.enum(["herb", "formula", "classic", "chapter"]), resourceId: z.number().int().positive() });
@@ -50,6 +50,7 @@ export const studyRouter = router({
       return deleteReviewReminder(ctx.user.id, input.id);
     }),
     markSeen: protectedProcedure.input(z.object({ eventId: z.number().int().positive() })).mutation(({ ctx, input }) => markReviewReminderSeen(ctx.user.id, input.eventId)),
+    markAllSeen: protectedProcedure.mutation(({ ctx }) => markAllReviewRemindersSeen(ctx.user.id)),
   }),
   notifications: router({
     list: protectedProcedure.input(z.object({ status: z.enum(["all", "unread", "read"]).default("all"), from: z.coerce.date().optional(), to: z.coerce.date().optional() }).optional()).query(({ ctx, input }) => listReviewNotifications(ctx.user.id, input ?? { status: "all" })),
