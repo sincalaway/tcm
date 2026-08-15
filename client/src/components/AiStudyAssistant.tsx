@@ -11,7 +11,7 @@ const AIChatBox = lazy(() => import("@/components/AIChatBox").then((module) => (
 type StudyContext = { kind: "本草" | "经方" | "古籍章节"; title: string; sourceTitle?: string; excerpt?: string; studyNote?: string; };
 type Provider = "auto" | "builtin" | "local" | "network";
 
-export function AiStudyAssistant({ context }: { context: StudyContext }) {
+export function AiStudyAssistant({ context, triggerLabel = "询问本页学习助手", triggerClassName = "" }: { context: StudyContext; triggerLabel?: string; triggerClassName?: string }) {
   const { isAuthenticated } = useAuth(); const utils = trpc.useUtils();
   const [open, setOpen] = useState(false); const [messages, setMessages] = useState<Message[]>([]); const [provider, setProvider] = useState<Provider>("auto"); const [conversationId, setConversationId] = useState<number | undefined>(); const [summary, setSummary] = useState(""); const [historySearch, setHistorySearch] = useState(""); const [knowledgeIds, setKnowledgeIds] = useState<number[]>([]);
   const providersQuery = trpc.aiStudy.providers.useQuery(undefined, { enabled: isAuthenticated && open });
@@ -32,10 +32,10 @@ export function AiStudyAssistant({ context }: { context: StudyContext }) {
 
   function sendQuestion(question: string) { if (!isAuthenticated) { startLogin(); return; } setMessages((current) => [...current, { role: "user", content: question }]); explainMutation.mutate({ context, question, provider, conversationId, knowledgeDocumentIds: knowledgeIds }); }
   function selectConversation(id: number | undefined) { setConversationId(id); if (!id) { setMessages([]); setSummary(""); } }
-  if (!isAuthenticated) return <button className="ai-study-trigger" type="button" onClick={startLogin}><Sparkles size={15} /> 登录后向学习助手提问</button>;
+  if (!isAuthenticated) return <button className={`ai-study-trigger ${triggerClassName}`} type="button" onClick={startLogin}><Sparkles size={15} /> 登录后向学习助手提问</button>;
 
   return <Dialog open={open} onOpenChange={setOpen}>
-    <DialogTrigger asChild><button className="ai-study-trigger" type="button"><BotMessageSquare size={15} /> 询问本页学习助手</button></DialogTrigger>
+    <DialogTrigger asChild><button className={`ai-study-trigger ${triggerClassName}`} type="button"><BotMessageSquare size={15} /> {triggerLabel}</button></DialogTrigger>
     <DialogContent className="ai-study-dialog" showCloseButton>
       <DialogHeader><DialogTitle>本页学习助手 · {context.title}</DialogTitle><DialogDescription>仅解释当前页面提供的文献线索与学习结构，不提供诊疗、处方、剂量或用药建议。</DialogDescription></DialogHeader>
       <div className="ai-provider-row"><label htmlFor="ai-provider">学习服务</label><select id="ai-provider" value={provider} onChange={(event) => setProvider(event.target.value as Provider)} disabled={providersQuery.isLoading || explainMutation.isPending}>{availableProviders.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select><small>{providersQuery.isLoading ? "正在读取可用服务……" : "未配置的本地或网络端点不会显示，系统会安全回退。"}</small></div>

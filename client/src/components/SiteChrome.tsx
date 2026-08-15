@@ -7,6 +7,7 @@ import { useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { startLogin } from "@/const";
 import { trpc } from "@/lib/trpc";
+import { AiStudyAssistant } from "@/components/AiStudyAssistant";
 
 const sealMark = "/manus-storage/tcm-seal-leaf-mark_31399890.png";
 
@@ -50,7 +51,7 @@ export function SiteChrome({ children }: { children: React.ReactNode }) {
           </nav>
 
           <div className="header-utility" aria-label="项目定位">
-            {loading ? <span className="utility-mark">校验书签</span> : user ? <><Link href="/notifications" className="notification-entry" aria-label={`复习通知中心，${unreadCount} 则待阅`}><Bell size={15} />{unreadCount ? <b>{unreadCount > 99 ? "99+" : unreadCount}</b> : null}</Link><Link href="/knowledge" className="notification-entry" aria-label="个人知识库"><Upload size={15} /></Link><Link href="/shuzhai" className="desk-entry"><BookOpenCheck size={15} />我的书案</Link><button className="header-logout" type="button" onClick={() => void logout()} aria-label="退出登录"><LogOut size={15} /></button></> : <button className="login-entry" type="button" onClick={() => startLogin()}>登录以记笔记</button>}
+            {loading ? <span className="utility-mark">校验书签</span> : user ? <><AiStudyAssistant context={{ kind: "古籍章节", title: "书斋通用学习对话", sourceTitle: "本草经方", excerpt: "可围绕当前学习路径、条文检索与资料整理提问。" }} triggerLabel="学习对话" triggerClassName="header-ai-entry" /><Link href="/notifications" className="notification-entry" aria-label={`复习通知中心，${unreadCount} 则待阅`}><Bell size={15} />{unreadCount ? <b>{unreadCount > 99 ? "99+" : unreadCount}</b> : null}</Link><Link href="/knowledge" className="notification-entry" aria-label="个人知识库"><Upload size={15} /></Link><Link href="/shuzhai" className="desk-entry"><BookOpenCheck size={15} />我的书案</Link><button className="header-logout" type="button" onClick={() => void logout()} aria-label="退出登录"><LogOut size={15} /></button></> : <button className="login-entry" type="button" onClick={() => startLogin()}>登录以记笔记</button>}
             <button
               className="mobile-menu-button"
               type="button"

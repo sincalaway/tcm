@@ -2,7 +2,7 @@ import { z } from "zod";
 import { parse as parseCookie } from "cookie";
 import { COOKIE_NAME } from "@shared/const";
 import { createHeartbeatJob, deleteHeartbeatJob, updateHeartbeatJob } from "../_core/heartbeat";
-import { archiveLearningGoal, attachReviewReminderSchedule, createLearningGoal, createReviewReminder, deleteKnowledgeDocument, deleteReviewReminder, getKnowledgeDocumentDownload, getLearningOverview, getReviewReminder, getStudyDesk, listKnowledgeDocuments, listLearningGoals, listReviewNotifications, listReviewReminders, listSavedItems, listStudyNotes, markAllReviewRemindersSeen, markReviewReminderSeen, setReadingProgress, toggleLearningPathStep, toggleSavedItem, updateLearningGoal, updateReviewReminder, updateStudyNote, createStudyNote, deleteStudyNote, uploadKnowledgeDocument } from "../db";
+import { archiveLearningGoal, attachReviewReminderSchedule, createLearningGoal, createReviewReminder, deleteKnowledgeDocument, deleteReviewNotifications, deleteReviewReminder, getKnowledgeDocumentDownload, getLearningOverview, getReviewReminder, getStudyDesk, listKnowledgeDocuments, listLearningGoals, listReviewNotifications, listReviewReminders, listSavedItems, listStudyNotes, markAllReviewRemindersSeen, markReviewReminderSeen, searchKnowledgeDocuments, setReadingProgress, toggleLearningPathStep, toggleSavedItem, updateLearningGoal, updateReviewReminder, updateStudyNote, createStudyNote, deleteStudyNote, uploadKnowledgeDocument } from "../db";
 import { protectedProcedure, router } from "../_core/trpc";
 
 const resourceInput = z.object({ resourceType: z.enum(["herb", "formula", "classic", "chapter"]), resourceId: z.number().int().positive() });
@@ -54,9 +54,12 @@ export const studyRouter = router({
   }),
   notifications: router({
     list: protectedProcedure.input(z.object({ status: z.enum(["all", "unread", "read"]).default("all"), from: z.coerce.date().optional(), to: z.coerce.date().optional() }).optional()).query(({ ctx, input }) => listReviewNotifications(ctx.user.id, input ?? { status: "all" })),
+    markAllSeen: protectedProcedure.mutation(({ ctx }) => markAllReviewRemindersSeen(ctx.user.id)),
+    delete: protectedProcedure.input(z.object({ eventIds: z.array(z.number().int().positive()).min(1).max(200) })).mutation(({ ctx, input }) => deleteReviewNotifications(ctx.user.id, input.eventIds)),
   }),
   knowledge: router({
     list: protectedProcedure.input(z.object({ query: z.string().trim().max(80).optional() }).optional()).query(({ ctx, input }) => listKnowledgeDocuments(ctx.user.id, input?.query)),
+    search: protectedProcedure.input(z.object({ query: z.string().trim().min(1).max(80) })).query(({ ctx, input }) => searchKnowledgeDocuments(ctx.user.id, input.query)),
     upload: protectedProcedure.input(z.object({ fileName: z.string().trim().min(1).max(255), mimeType: z.enum(["text/plain", "text/markdown", "application/pdf"]), base64: z.string().min(4).max(7_200_000) })).mutation(({ ctx, input }) => uploadKnowledgeDocument(ctx.user.id, input)),
     download: protectedProcedure.input(z.object({ id: z.number().int().positive() })).mutation(({ ctx, input }) => getKnowledgeDocumentDownload(ctx.user.id, input.id)),
     delete: protectedProcedure.input(z.object({ id: z.number().int().positive() })).mutation(({ ctx, input }) => deleteKnowledgeDocument(ctx.user.id, input.id)),
