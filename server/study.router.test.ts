@@ -4,10 +4,12 @@ import type { TrpcContext } from "./_core/context";
 const dbMock = vi.hoisted(() => ({
   createStudyNote: vi.fn(),
   deleteStudyNote: vi.fn(),
+  getLearningOverview: vi.fn(),
   getStudyDesk: vi.fn(),
   listSavedItems: vi.fn(),
   listStudyNotes: vi.fn(),
   setReadingProgress: vi.fn(),
+  toggleLearningPathStep: vi.fn(),
   toggleSavedItem: vi.fn(),
   updateStudyNote: vi.fn(),
 }));
@@ -60,5 +62,17 @@ describe("study router", () => {
     const caller = appRouter.createCaller(createContext());
     await expect(caller.study.desk()).resolves.toEqual({ saved: [], notes: [], progress: [] });
     expect(dbMock.getStudyDesk).toHaveBeenCalledWith(42);
+  });
+
+  it("scopes learning-route overview and step updates to the authenticated user", async () => {
+    dbMock.getLearningOverview.mockResolvedValue({ savedCount: 1, noteCount: 2, readingCount: 1, averageReadingProgress: 70, completedPathCount: 0, paths: [] });
+    dbMock.toggleLearningPathStep.mockResolvedValue({ completedSteps: [1] });
+    const caller = appRouter.createCaller(createContext());
+
+    await expect(caller.study.overview()).resolves.toMatchObject({ savedCount: 1, averageReadingProgress: 70 });
+    await expect(caller.study.paths.toggleStep({ pathSlug: "gui-zhi-ying-wei", step: 1 })).resolves.toEqual({ completedSteps: [1] });
+
+    expect(dbMock.getLearningOverview).toHaveBeenCalledWith(42);
+    expect(dbMock.toggleLearningPathStep).toHaveBeenCalledWith(42, { pathSlug: "gui-zhi-ying-wei", step: 1 });
   });
 });

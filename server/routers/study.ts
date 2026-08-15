@@ -1,11 +1,15 @@
 import { z } from "zod";
-import { createStudyNote, deleteStudyNote, getStudyDesk, listSavedItems, listStudyNotes, setReadingProgress, toggleSavedItem, updateStudyNote } from "../db";
+import { createStudyNote, deleteStudyNote, getLearningOverview, getStudyDesk, listSavedItems, listStudyNotes, setReadingProgress, toggleLearningPathStep, toggleSavedItem, updateStudyNote } from "../db";
 import { protectedProcedure, router } from "../_core/trpc";
 
 const resourceInput = z.object({ resourceType: z.enum(["herb", "formula", "classic", "chapter"]), resourceId: z.number().int().positive() });
 
 export const studyRouter = router({
   desk: protectedProcedure.query(({ ctx }) => getStudyDesk(ctx.user.id)),
+  overview: protectedProcedure.query(({ ctx }) => getLearningOverview(ctx.user.id)),
+  paths: router({
+    toggleStep: protectedProcedure.input(z.object({ pathSlug: z.enum(["gui-zhi-ying-wei", "fu-ling-shui-ye", "bai-zhu-zhong-jiao"]), step: z.number().int().min(1).max(3) })).mutation(({ ctx, input }) => toggleLearningPathStep(ctx.user.id, input)),
+  }),
   saved: router({
     list: protectedProcedure.query(({ ctx }) => listSavedItems(ctx.user.id)),
     toggle: protectedProcedure.input(resourceInput).mutation(({ ctx, input }) => toggleSavedItem(ctx.user.id, input)),
