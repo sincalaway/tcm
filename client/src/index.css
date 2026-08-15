@@ -167,3 +167,5 @@ h1, h2, h3 { font-family: "Noto Serif SC", serif; color: var(--ink); letter-spac
 .margin-note > div > span { display: inline-flex; gap: .2rem; }
 
 .desk-row:hover b, .desk-progress:hover b { color: var(--cinnabar); }.desk-note small, .desk-progress small { color: var(--ink-soft); font-size: .65rem; }.desk-progress { display: grid; }.desk-progress > div { display: flex; justify-content: space-between; gap: .5rem; }
+
+.route-loading { display: grid; min-height: 45vh; place-items: center; color: var(--ink-soft); font-family: "Noto Serif SC", serif; letter-spacing: .12em; }
