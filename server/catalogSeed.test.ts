@@ -20,7 +20,7 @@ describe("source-backed starter catalog", () => {
   it("keeps each formula source title aligned to its source URL", () => {
     for (const formula of formulaSeed) {
       const [, name, , sourceTitle, , , , , sourceUrl] = formula;
-      expect(expectedFormulaSources[sourceTitle], `${name} 的出处未配置`).toBe(sourceUrl);
+      expect(expectedFormulaSources[sourceTitle], `${name} 的出处未配置`).toBe(sourceUrl.replace("/zh-hans/", "/wiki/"));
     }
   });
 
@@ -47,10 +47,16 @@ describe("source-backed starter catalog", () => {
   });
 
   it("keeps expanded Shang Han Lun passages and formula mappings traceable", () => {
-    expect(shangHanPassageSeed.length).toBeGreaterThanOrEqual(10);
+    expect(shangHanPassageSeed.length).toBeGreaterThanOrEqual(30);
     expect(shangHanPassageSeed.every((passage) => passage[6].includes("zh.wikisource.org"))).toBe(true);
+    expect(shangHanPassageSeed.filter((passage) => passage[0] === "辨太阳病脉证并治").length).toBeGreaterThanOrEqual(11);
+    expect(shangHanPassageSeed.filter((passage) => passage[0] === "辨阳明病脉证并治").length).toBeGreaterThanOrEqual(10);
     for (const formulaSlug of ["ma-huang-tang", "xiao-chai-hu-tang", "ban-xia-xie-xin-tang", "si-ni-tang"]) {
       expect(formulaPassageSeed.some((mapping) => mapping[0] === formulaSlug), `${formulaSlug} 应关联具体条文`).toBe(true);
+    }
+    const shangHanFormulaSlugs = formulaSeed.filter((formula) => formula[3] === "《伤寒论》").map((formula) => formula[0]);
+    for (const formulaSlug of shangHanFormulaSlugs) {
+      expect(formulaPassageSeed.some((mapping) => mapping[0] === formulaSlug), `${formulaSlug} 应关联至少一条《伤寒论》条文`).toBe(true);
     }
   });
 });

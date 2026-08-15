@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { appendAiStudyMessage, createAiStudyConversation, deleteAiStudyConversation, getAiStudyConversation, getRecentAiStudyMessages, listAiStudyConversations } from "../db";
+import { appendAiStudyMessage, createAiStudyConversation, deleteAiStudyConversation, getAiStudyConversation, getRecentAiStudyMessages, listAiStudyConversations, saveAiStudySummary, searchAiStudyConversations } from "../db";
 import { ENV } from "../_core/env";
 import { invokeLLM, listLLMModels } from "../_core/llm";
 import { protectedProcedure, router } from "../_core/trpc";
@@ -70,6 +70,21 @@ export const aiStudyRouter = router({
       const result = await getAiStudyConversation(ctx.user.id, input.id); if (!result) throw new Error("对话不存在或无权访问"); return result;
     }),
     delete: protectedProcedure.input(z.object({ id: z.number().int().positive() })).mutation(({ ctx, input }) => deleteAiStudyConversation(ctx.user.id, input.id)),
+    search: protectedProcedure.input(z.object({ query: z.string().trim().min(1).max(80) })).query(({ ctx, input }) => searchAiStudyConversations(ctx.user.id, input.query)),
+  }),
+  summaries: router({
+    generate: protectedProcedure.input(z.object({ conversationId: z.number().int().positive(), provider: providerSchema.default("auto") })).mutation(async ({ ctx, input }) => {
+      const detail = await getAiStudyConversation(ctx.user.id, input.conversationId); if (!detail) throw new Error("对话不存在或无权访问");
+      if (!detail.messages.length) throw new Error("当前对话尚无可摘要内容");
+      const recentTranscript = detail.messages.slice(-40).map((message) => `${message.role === "user" ? "学习者" : "助手"}：${message.content.slice(0, 1500)}`).join("\n");
+      const previousSummary = detail.summary?.content ? `\n既有摘要（请修订、合并而非机械重复）：\n${detail.summary.content.slice(0, 3500)}` : "";
+      const result = await explainWithProvider(input.provider, [
+        { role: "system", content: `${assistantGuardrail}\n\n你现在只负责生成个人学习对话摘要。请用“已确认的原典线索”“学习者的问题与已获回答”“仍待核对的问题”三个简短小节整理；不得补充对话中没有的事实，也不得给出诊疗或用药建议。` },
+        { role: "user", content: `请总结《${detail.conversation.contextTitle}》的下列对话（共 ${detail.messages.length} 条，展示最近 ${Math.min(detail.messages.length, 40)} 条）：${previousSummary}\n\n${recentTranscript}` },
+      ]);
+      const summary = await saveAiStudySummary(ctx.user.id, input.conversationId, result.answer.slice(0, 6000), detail.messages.length);
+      return { ...result, summary };
+    }),
   }),
   explain: protectedProcedure.input(z.object({ context: contextSchema, question: z.string().trim().min(1).max(600), provider: providerSchema.default("auto"), conversationId: z.number().int().positive().optional() })).mutation(async ({ ctx, input }) => {
     const kind = toConversationKind(input.context.kind);
@@ -80,6 +95,7 @@ export const aiStudyRouter = router({
     const history: StudyMessage[] = (existing?.messages ?? []).map((message) => ({ role: message.role, content: message.content.slice(0, 1800) }));
     const messages: StudyMessage[] = [
       { role: "system", content: `${assistantGuardrail}\n\n当前固定学习上下文：\n- 类型：${input.context.kind}\n- 标题：${input.context.title}\n- 来源：${input.context.sourceTitle ?? "未提供"}\n- 摘录：${input.context.excerpt ?? "未提供"}\n- 研读提示：${input.context.studyNote ?? "未提供"}\n\n仅将下列最近历史视为上下文；若历史未足以确认事实，请明确说明。` },
+      ...(existing?.summary?.content ? [{ role: "system" as const, content: `本会话的既有学习摘要（仅作连续性线索，原典事实仍须以当前资料核对）：\n${existing.summary.content.slice(0, 3500)}` }] : []),
       ...history,
       { role: "user", content: input.question },
     ];

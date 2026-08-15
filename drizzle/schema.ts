@@ -273,6 +273,37 @@ export const aiStudyMessages = mysqlTable("ai_study_messages", {
   index("ai_study_messages_conversation_idx").on(table.conversationId, table.createdAt),
 ]);
 
+/** One learner-controlled rolling study summary per conversation; source messages remain unchanged. */
+export const aiStudySummaries = mysqlTable("ai_study_summaries", {
+  id: int("id").autoincrement().primaryKey(),
+  conversationId: int("conversationId").notNull(),
+  userId: int("userId").notNull(),
+  content: text("content").notNull(),
+  sourceMessageCount: int("sourceMessageCount").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+  uniqueIndex("ai_study_summary_conversation_unique").on(table.conversationId),
+  index("ai_study_summaries_user_idx").on(table.userId, table.updatedAt),
+]);
+
+/** Learner-owned knowledge-base file metadata; bytes live exclusively in object storage. */
+export const knowledgeDocuments = mysqlTable("knowledge_documents", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  title: varchar("title", { length: 255 }).notNull(),
+  mimeType: varchar("mimeType", { length: 128 }).notNull(),
+  sizeBytes: int("sizeBytes").notNull(),
+  storageKey: varchar("storageKey", { length: 1024 }).notNull().unique(),
+  storageUrl: varchar("storageUrl", { length: 1024 }).notNull(),
+  textPreview: text("textPreview"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+  index("knowledge_documents_user_idx").on(table.userId, table.updatedAt),
+  index("knowledge_documents_title_idx").on(table.userId, table.title),
+]);
+
 export type Herb = typeof herbs.$inferSelect;
 export type Formula = typeof formulas.$inferSelect;
 export type Classic = typeof classics.$inferSelect;
@@ -288,3 +319,5 @@ export type ReviewReminder = typeof reviewReminders.$inferSelect;
 export type ReviewReminderEvent = typeof reviewReminderEvents.$inferSelect;
 export type AiStudyConversation = typeof aiStudyConversations.$inferSelect;
 export type AiStudyMessage = typeof aiStudyMessages.$inferSelect;
+export type AiStudySummary = typeof aiStudySummaries.$inferSelect;
+export type KnowledgeDocument = typeof knowledgeDocuments.$inferSelect;

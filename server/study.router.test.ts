@@ -9,10 +9,14 @@ const dbMock = vi.hoisted(() => ({
   createStudyNote: vi.fn(),
   deleteReviewReminder: vi.fn(),
   deleteStudyNote: vi.fn(),
+  deleteKnowledgeDocument: vi.fn(),
+  getKnowledgeDocumentDownload: vi.fn(),
   getReviewReminder: vi.fn(),
   getLearningOverview: vi.fn(),
   getStudyDesk: vi.fn(),
   listLearningGoals: vi.fn(),
+  listKnowledgeDocuments: vi.fn(),
+  listReviewNotifications: vi.fn(),
   listReviewReminders: vi.fn(),
   listSavedItems: vi.fn(),
   listStudyNotes: vi.fn(),
@@ -23,6 +27,7 @@ const dbMock = vi.hoisted(() => ({
   updateLearningGoal: vi.fn(),
   updateReviewReminder: vi.fn(),
   updateStudyNote: vi.fn(),
+  uploadKnowledgeDocument: vi.fn(),
 }));
 
 const heartbeatMock = vi.hoisted(() => ({ createHeartbeatJob: vi.fn(), deleteHeartbeatJob: vi.fn(), updateHeartbeatJob: vi.fn() }));
@@ -114,5 +119,20 @@ describe("study router", () => {
     expect(dbMock.attachReviewReminderSchedule).toHaveBeenCalledWith(42, 21, "task-21");
     expect(dbMock.listReviewReminders).toHaveBeenCalledWith(42);
     expect(dbMock.markReviewReminderSeen).toHaveBeenCalledWith(42, 31);
+  });
+
+  it("filters notification records only within the authenticated user's inbox", async () => {
+    dbMock.listReviewNotifications.mockResolvedValue([]);
+    const caller = appRouter.createCaller(createContext());
+    await caller.study.notifications.list({ status: "unread", from: new Date("2026-08-01T00:00:00Z"), to: new Date("2026-08-15T23:59:59Z") });
+    expect(dbMock.listReviewNotifications).toHaveBeenCalledWith(42, expect.objectContaining({ status: "unread" }));
+  });
+
+  it("keeps knowledge uploads, listing, download links and deletion inside the authenticated user scope", async () => {
+    dbMock.uploadKnowledgeDocument.mockResolvedValue({ id: 9, title: "太阳病笔记.md" }); dbMock.listKnowledgeDocuments.mockResolvedValue([]); dbMock.getKnowledgeDocumentDownload.mockResolvedValue({ id: 9, storageUrl: "/manus-storage/private" }); dbMock.deleteKnowledgeDocument.mockResolvedValue({ success: true });
+    const caller = appRouter.createCaller(createContext());
+    await caller.study.knowledge.upload({ fileName: "太阳病笔记.md", mimeType: "text/markdown", base64: "dGVzdA==" }); await caller.study.knowledge.list({ query: "太阳" }); await caller.study.knowledge.download({ id: 9 }); await caller.study.knowledge.delete({ id: 9 });
+    expect(dbMock.uploadKnowledgeDocument).toHaveBeenCalledWith(42, expect.objectContaining({ fileName: "太阳病笔记.md" }));
+    expect(dbMock.listKnowledgeDocuments).toHaveBeenCalledWith(42, "太阳"); expect(dbMock.getKnowledgeDocumentDownload).toHaveBeenCalledWith(42, 9); expect(dbMock.deleteKnowledgeDocument).toHaveBeenCalledWith(42, 9);
   });
 });
