@@ -2,8 +2,10 @@
  * 宋刻书斋：导航借鉴古籍目录签，砚石青为结构色，辰砂红仅用于当前路径与关键提示。
  */
 import { Link, useLocation } from "wouter";
-import { Menu, X } from "lucide-react";
+import { BookOpenCheck, LogOut, Menu, Search, X } from "lucide-react";
 import { useState } from "react";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { startLogin } from "@/const";
 
 const sealMark = "/manus-storage/tcm-seal-leaf-mark_31399890.png";
 
@@ -12,11 +14,13 @@ const links = [
   { href: "/bencao", label: "本草索引" },
   { href: "/jingfang", label: "经方研读" },
   { href: "/guji", label: "古籍文献" },
+  { href: "/search", label: "全域检索" },
 ];
 
 export function SiteChrome({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const [open, setOpen] = useState(false);
+  const { user, loading, logout } = useAuth();
 
   return (
     <div className="site-shell">
@@ -43,7 +47,7 @@ export function SiteChrome({ children }: { children: React.ReactNode }) {
           </nav>
 
           <div className="header-utility" aria-label="项目定位">
-            <span className="utility-mark">研习版</span>
+            {loading ? <span className="utility-mark">校验书签</span> : user ? <><Link href="/shuzhai" className="desk-entry"><BookOpenCheck size={15} />我的书案</Link><button className="header-logout" type="button" onClick={() => void logout()} aria-label="退出登录"><LogOut size={15} /></button></> : <button className="login-entry" type="button" onClick={() => startLogin()}>登录以记笔记</button>}
             <button
               className="mobile-menu-button"
               type="button"
@@ -62,6 +66,7 @@ export function SiteChrome({ children }: { children: React.ReactNode }) {
                 {link.label}
               </Link>
             ))}
+            {user ? <Link href="/shuzhai" className="mobile-nav-link" onClick={() => setOpen(false)}><BookOpenCheck size={15} />我的书案</Link> : <button type="button" className="mobile-nav-link" onClick={() => startLogin()}>登录以记笔记</button>}
           </nav>
         )}
       </header>
