@@ -28,6 +28,7 @@ import { ENV } from "./_core/env";
 import { storageGetSignedUrl, storagePut } from "./storage";
 import { extractText } from "unpdf";
 import { searchFormulaStudyRecords, type FormulaStudyMatchMode } from "./formulaStudySearch";
+import type { PassageLearningRecord } from "./passageLearningMatch";
 
 export type ResourceType = "herb" | "formula" | "classic" | "chapter";
 const KNOWLEDGE_ALLOWED_TYPES = new Set(["text/plain", "text/markdown", "application/pdf"]);
@@ -210,6 +211,27 @@ export async function getClassicPassages(chapterId: number) {
   const db = await getDb();
   if (!db) return [];
   return db.select().from(classicPassages).where(eq(classicPassages.chapterId, chapterId)).orderBy(classicPassages.passageNumber);
+}
+
+export async function getShangHanPassageLearningIndex(): Promise<PassageLearningRecord[]> {
+  await ensureCatalogSeed();
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({
+    id: classicPassages.id,
+    chapterId: classicPassages.chapterId,
+    chapterTitle: classicChapters.title,
+    passageNumber: classicPassages.passageNumber,
+    title: classicPassages.title,
+    excerpt: classicPassages.excerpt,
+    keywords: classicPassages.keywords,
+    sourceReference: classicPassages.sourceReference,
+    sourceUrl: classicPassages.sourceUrl,
+  }).from(classicPassages)
+    .innerJoin(classicChapters, eq(classicPassages.chapterId, classicChapters.id))
+    .innerJoin(classics, eq(classicPassages.classicId, classics.id))
+    .where(eq(classics.slug, "shang-han-lun"))
+    .orderBy(classicChapters.sequence, classicPassages.passageNumber);
 }
 
 export async function getPassageVersions(passageId: number) {
