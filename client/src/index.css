@@ -257,3 +257,42 @@ h1, h2, h3 { font-family: "Noto Serif SC", serif; color: var(--ink); letter-spac
   .passage-version-card { border-color: #aaa; background: #fff; }
   a { color: #111; text-decoration: none; }
 }
+
+/* 条文药名索引与本草速览 */
+.passage-herb-text { display: inline; }
+.passage-herb-link { display: inline; border: 0; padding: 0 .06em; color: var(--cinnabar); background: linear-gradient(transparent 68%, rgba(165,58,44,.16) 0); font-family: inherit; font-size: inherit; line-height: inherit; text-decoration: underline; text-decoration-color: rgba(165,58,44,.5); text-underline-offset: .14em; transition: color 150ms cubic-bezier(.23,1,.32,1), background 150ms cubic-bezier(.23,1,.32,1); }
+.passage-herb-link:hover { color: #742418; background: rgba(165,58,44,.16); }
+.passage-herb-link:active { transform: scale(.98); }
+.passage-herb-hint, .passage-herb-loading { margin: .45rem 0 0; color: var(--ink-soft); font-size: .66rem; }
+.passage-herb-hint::before { display: inline-block; width: 5px; height: 5px; margin: 0 .42rem .08rem 0; background: var(--cinnabar); border-radius: 50%; content: ""; }
+.herb-detail-dialog { box-shadow: 10px 12px 0 rgba(23,59,58,.13); }
+.herb-dialog-grid { margin: .25rem 0 .5rem; }
+.herb-dialog-grid div { min-height: 72px; }
+.passage-herb-dialog-actions { display: flex; flex-wrap: wrap; gap: .55rem; margin-top: 1.5rem; padding-top: .9rem; border-top: 1px solid var(--line); }
+.passage-herb-dialog-actions a { border: 1px solid var(--ink); padding: .42rem .66rem; color: var(--ink); font-size: .72rem; transition: color 160ms cubic-bezier(.23,1,.32,1), background 160ms cubic-bezier(.23,1,.32,1); }
+.passage-herb-dialog-actions a:hover { color: var(--paper); background: var(--ink); }
+.passage-herb-disclaimer { margin: 1.2rem 0 0; padding: .65rem .75rem; border-left: 2px solid var(--cinnabar); color: var(--ink-soft); background: rgba(165,58,44,.05); font-size: .66rem; line-height: 1.7; }
+
+/* 《伤寒论》篇章、条文与版本筛选 */
+.passage-filter-heading { display: flex; align-items: center; justify-content: space-between; gap: .8rem; }
+.passage-filter-heading > span { color: var(--ink-soft); font-size: .65rem; }
+.passage-filter-input { display: flex; align-items: center; gap: .42rem; margin-top: .68rem; border: 1px solid var(--line); padding: .34rem .5rem; background: rgba(255,255,255,.35); }
+.passage-filter-input svg { flex: 0 0 auto; color: var(--cinnabar); }
+.passage-filter-input input { width: 100%; min-width: 0; border: 0; outline: 0; color: var(--ink); background: transparent; font-size: .7rem; }
+.passage-filter-input button { flex: 0 0 auto; border: 0; padding: .12rem .22rem; color: var(--cinnabar); background: transparent; font-size: .62rem; }
+.passage-filter-count { margin: .32rem 0 .15rem; color: var(--ink-soft); font-size: .62rem; }
+.version-filter-bar { display: flex; flex-wrap: wrap; align-items: end; gap: .6rem 1rem; margin: .9rem 0; padding: .78rem .85rem; border: 1px solid var(--line); background: rgba(255,255,255,.28); }
+.version-filter-bar .facet-select { min-width: min(100%, 220px); }
+.version-filter-bar .facet-select select { max-width: 100%; }
+.version-filter-bar p { flex: 1; min-width: 180px; margin: 0; color: var(--ink-soft); font-size: .66rem; }
+.version-comparison-focus { margin: 1rem 0; padding: .85rem; border-top: 2px solid var(--cinnabar); border-bottom: 1px solid var(--line); background: rgba(165,58,44,.045); }
+.version-comparison-focus > div:first-child { display: flex; align-items: end; justify-content: space-between; gap: 1rem; }
+.version-comparison-focus p { max-width: 340px; margin: 0; color: var(--ink-soft); font-size: .65rem; }
+.comparison-grid { grid-template-columns: repeat(2, minmax(0,1fr)); margin-top: .75rem; }
+.passage-version-card.is-selected { border-color: var(--cinnabar); box-shadow: inset 0 2px 0 rgba(165,58,44,.25); }
+.version-card-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .55rem; margin-top: .7rem; }
+.version-compare-toggle { border: 1px solid var(--line); padding: .22rem .42rem; color: var(--ink); background: transparent; font-size: .61rem; transition: color 150ms cubic-bezier(.23,1,.32,1), background 150ms cubic-bezier(.23,1,.32,1), border 150ms cubic-bezier(.23,1,.32,1); }
+.version-compare-toggle:hover:not(:disabled), .passage-version-card.is-selected .version-compare-toggle { border-color: var(--cinnabar); color: var(--paper); background: var(--cinnabar); }
+.version-compare-toggle:disabled { opacity: .45; cursor: not-allowed; }
+@media (max-width: 640px) { .passage-filter-heading { align-items: flex-start; flex-direction: column; gap: .15rem; }.version-filter-bar { align-items: stretch; }.version-filter-bar .facet-select { width: 100%; }.version-filter-bar p { min-width: 0; }.version-comparison-focus > div:first-child { align-items: flex-start; flex-direction: column; gap: .35rem; }.comparison-grid { grid-template-columns: 1fr; } }
+@media (max-width: 480px) { .herb-detail-dialog { padding: 1.25rem; }.passage-herb-dialog-actions { display: grid; grid-template-columns: 1fr; }.passage-herb-dialog-actions a { text-align: center; } }
