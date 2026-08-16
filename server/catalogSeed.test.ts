@@ -84,6 +84,25 @@ describe("source-backed starter catalog", () => {
     }
   });
 
+  it("includes less-common Shang Han Lun materia medica and classical formula materials", () => {
+    const herbNames = new Set(herbSeed.map(herb => herb[1]));
+    for (const name of [
+      "蜀漆",
+      "芫花",
+      "瓜蒂",
+      "赤小豆",
+      "葶苈子",
+      "文蛤",
+      "巴豆",
+      "禹余粮",
+      "猪胆汁",
+      "鸡子清",
+    ]) {
+      expect(herbNames.has(name), `${name} 应作为《伤寒论》相关索引药材`).toBe(true);
+    }
+    expect(herbSeed.length).toBeGreaterThanOrEqual(200);
+  });
+
   it("covers every distinct medicinal name referenced by the existing formula catalogue", () => {
     const herbNames = new Set(herbSeed.map(herb => herb[1]));
     const aliases = herbSeed.flatMap(herb => herb[3].split("、"));
@@ -185,7 +204,18 @@ describe("source-backed starter catalog", () => {
       version => `${version[0]}:${version[1]}:${version[2]}`
     );
     expect(new Set(keys).size).toBe(keys.length);
-    expect(passageVersionSeed.length).toBeGreaterThanOrEqual(4);
+    expect(passageVersionSeed.length).toBeGreaterThanOrEqual(10);
+    const firstTaiyangEditions = passageVersionSeed.filter(
+      version => version[0] === "辨太阳病脉证并治" && version[1] === 1
+    );
+    expect(firstTaiyangEditions.length).toBeGreaterThanOrEqual(4);
+    expect(firstTaiyangEditions.map(version => version[2])).toEqual(
+      expect.arrayContaining([
+        "宋本（赵开美复刻）",
+        "康平本（日本抄本）",
+        "赵开美本（明万历翻刻）",
+      ])
+    );
     for (const [
       chapterTitle,
       passageNumber,

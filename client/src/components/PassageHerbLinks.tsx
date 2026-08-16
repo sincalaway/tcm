@@ -66,13 +66,22 @@ function makeSegments(text: string, herbs: PassageHerbRecord[]): TextSegment[] {
 export function PassageHerbLinks({
   text,
   herbs,
+  onSelectHerb,
 }: {
   text: string;
   herbs: PassageHerbRecord[];
+  onSelectHerb?: (herb: PassageHerbRecord) => void;
 }) {
   const [selectedHerb, setSelectedHerb] = useState<PassageHerbRecord | null>(
     null
   );
+  const selectHerb = (herb: PassageHerbRecord) => {
+    if (onSelectHerb) {
+      onSelectHerb(herb);
+      return;
+    }
+    setSelectedHerb(herb);
+  };
   const segments = useMemo(() => makeSegments(text, herbs), [text, herbs]);
 
   return (
@@ -84,7 +93,7 @@ export function PassageHerbLinks({
               key={`${segment.text}-${index}`}
               type="button"
               className="passage-herb-link"
-              onClick={() => setSelectedHerb(segment.herb ?? null)}
+              onClick={() => selectHerb(segment.herb as PassageHerbRecord)}
               aria-label={`查看中药${segment.herb.name}的索引详情`}
             >
               {segment.text}
@@ -94,12 +103,12 @@ export function PassageHerbLinks({
           )
         )}
       </span>
-      <HerbQuickView
+      {!onSelectHerb ? <HerbQuickView
         herb={selectedHerb}
         onOpenChange={open => {
           if (!open) setSelectedHerb(null);
         }}
-      />
+      /> : null}
     </>
   );
 }

@@ -296,3 +296,52 @@ h1, h2, h3 { font-family: "Noto Serif SC", serif; color: var(--ink); letter-spac
 .version-compare-toggle:disabled { opacity: .45; cursor: not-allowed; }
 @media (max-width: 640px) { .passage-filter-heading { align-items: flex-start; flex-direction: column; gap: .15rem; }.version-filter-bar { align-items: stretch; }.version-filter-bar .facet-select { width: 100%; }.version-filter-bar p { min-width: 0; }.version-comparison-focus > div:first-child { align-items: flex-start; flex-direction: column; gap: .35rem; }.comparison-grid { grid-template-columns: 1fr; } }
 @media (max-width: 480px) { .herb-detail-dialog { padding: 1.25rem; }.passage-herb-dialog-actions { display: grid; grid-template-columns: 1fr; }.passage-herb-dialog-actions a { text-align: center; } }
+
+
+/* 条文阅读：药材侧栏与多版本并读 */
+.passage-reading-layout { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(255px, .75fr); align-items: start; gap: 1rem; margin-top: .45rem; }
+.passage-reading-main { min-width: 0; }
+.passage-reading-main .passage-herb-hint { margin-bottom: 0; }
+.herb-study-sidebar { position: sticky; top: 1rem; min-width: 0; border: 1px solid rgba(91,68,45,.2); border-top: 3px solid var(--cinnabar); padding: 1rem; background: rgba(255,253,248,.86); box-shadow: 5px 7px 0 rgba(23,59,58,.08); }
+.herb-sidebar-header { display: flex; align-items: flex-start; justify-content: space-between; gap: .65rem; padding-bottom: .72rem; border-bottom: 1px solid var(--line); }
+.herb-sidebar-header h3, .herb-sidebar-placeholder h3 { margin: .25rem 0 .08rem; font-family: "Noto Serif SC", serif; font-size: 1.42rem; }
+.herb-sidebar-header p, .herb-sidebar-placeholder p { margin: 0; color: var(--ink-soft); font-size: .66rem; line-height: 1.65; }
+.herb-sidebar-header button { flex: 0 0 auto; border: 1px solid var(--line); padding: .22rem .38rem; color: var(--ink-soft); background: transparent; font-size: .61rem; }
+.herb-sidebar-header button:hover { border-color: var(--cinnabar); color: var(--cinnabar); }
+.herb-sidebar-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .55rem .7rem; margin: .75rem 0; }
+.herb-sidebar-facts div:last-child { grid-column: 1 / -1; }
+.herb-sidebar-facts dt { color: var(--ink-soft); font-size: .59rem; letter-spacing: .05em; }
+.herb-sidebar-facts dd { margin: .15rem 0 0; color: var(--ink); font-size: .66rem; line-height: 1.55; }
+.herb-sidebar-section { margin-top: .95rem; padding-top: .82rem; border-top: 1px solid var(--line); }
+.pairing-stack, .classic-study-stack { display: grid; gap: .55rem; margin-top: .55rem; }
+.pairing-stack article, .classic-study-stack article { padding: .58rem .62rem; border-left: 2px solid rgba(165,58,44,.38); background: rgba(165,58,44,.045); }
+.pairing-stack b { display: block; color: var(--ink); font-family: "Noto Serif SC", serif; font-size: .78rem; }
+.pairing-stack span { display: block; margin-top: .15rem; color: var(--cinnabar); font-size: .6rem; line-height: 1.5; }
+.pairing-stack p, .classic-study-stack p { margin: .35rem 0; color: var(--ink-soft); font-size: .62rem; line-height: 1.65; }
+.pairing-stack a, .classic-study-stack a { color: var(--cinnabar); font-size: .58rem; line-height: 1.45; }
+.pairing-stack a svg, .classic-study-stack a svg, .herb-sidebar-actions svg { display: inline-block; margin-left: .12rem; vertical-align: -.14em; }
+.classic-study-stack header { display: flex; justify-content: space-between; gap: .5rem; color: var(--ink); font-size: .66rem; }
+.classic-study-stack header span { color: var(--ink-soft); font-size: .58rem; }
+.classic-study-stack em { color: var(--cinnabar); font-style: normal; }
+.sidebar-formula-links { display: grid; gap: .38rem; margin-top: .55rem; }
+.sidebar-formula-links a, .herb-sidebar-actions > a { display: block; border: 1px solid var(--line); padding: .45rem .55rem; color: var(--ink); background: rgba(255,255,255,.35); font-size: .65rem; line-height: 1.5; transition: background 160ms cubic-bezier(.23,1,.32,1), color 160ms cubic-bezier(.23,1,.32,1), border 160ms cubic-bezier(.23,1,.32,1); }
+.sidebar-formula-links a:hover, .herb-sidebar-actions > a:hover { border-color: var(--cinnabar); color: var(--paper); background: var(--cinnabar); }
+.sidebar-formula-links span { display: inline-block; margin-right: .38rem; color: var(--cinnabar); font-size: .56rem; }
+.sidebar-formula-links a:hover span { color: var(--paper); }
+.herb-sidebar-actions { display: grid; gap: .45rem; margin-top: 1rem; }
+.herb-sidebar-disclaimer, .sidebar-empty { margin: .65rem 0 0; color: var(--ink-soft); font-size: .59rem; line-height: 1.65; }
+.herb-sidebar-disclaimer { padding-top: .55rem; border-top: 1px dotted var(--line); }
+.herb-sidebar-placeholder { padding: .3rem 0; }
+.version-filter-bar { display: grid; grid-template-columns: minmax(160px, 220px) minmax(180px, 1fr) auto; align-items: end; }
+.version-bulk-actions { display: flex; flex-wrap: wrap; gap: .38rem; }
+.version-bulk-actions button { border: 1px solid var(--line); padding: .32rem .45rem; color: var(--ink); background: rgba(255,255,255,.35); font-size: .6rem; white-space: nowrap; }
+.version-bulk-actions button:hover:not(:disabled) { border-color: var(--cinnabar); color: var(--cinnabar); }
+.version-bulk-actions button:disabled { opacity: .42; cursor: not-allowed; }
+.version-comparison-focus .comparison-grid { overflow-x: auto; padding-bottom: .35rem; }
+.version-comparison-focus.count-2 .comparison-grid { grid-template-columns: repeat(2, minmax(260px, 1fr)); }
+.version-comparison-focus.count-3 .comparison-grid { grid-template-columns: repeat(3, minmax(240px, 1fr)); }
+.version-comparison-focus.count-4 .comparison-grid { grid-template-columns: repeat(4, minmax(225px, 1fr)); }
+@media (max-width: 1100px) { .passage-reading-layout { grid-template-columns: 1fr; }.herb-study-sidebar { position: relative; top: auto; }.version-filter-bar { grid-template-columns: minmax(170px, 220px) 1fr; }.version-bulk-actions { grid-column: 1 / -1; } }
+@media (max-width: 700px) { .classic-leaf { padding: 1.35rem 1rem; }.chapter-block ol { grid-template-columns: 1fr; }.passage-block { padding: .9rem; }.herb-study-sidebar { padding: .85rem; }.version-filter-bar { grid-template-columns: 1fr; align-items: stretch; }.version-filter-bar .facet-select { width: 100%; }.version-bulk-actions { display: grid; grid-template-columns: 1fr 1fr; }.version-bulk-actions button { min-height: 38px; }.version-comparison-focus { margin-right: -.2rem; margin-left: -.2rem; padding: .72rem; }.version-comparison-focus.count-2 .comparison-grid { grid-template-columns: repeat(2, minmax(245px, 1fr)); }.version-comparison-focus.count-3 .comparison-grid { grid-template-columns: repeat(3, minmax(245px, 1fr)); }.version-comparison-focus.count-4 .comparison-grid { grid-template-columns: repeat(4, minmax(245px, 1fr)); }.passage-version-card { min-width: 0; } }
+@media (max-width: 480px) { .leaf-title { align-items: flex-start; margin: 1.3rem 0 .8rem; }.leaf-title h2 { font-size: 2.1rem; }.passage-block blockquote { font-size: 1rem; line-height: 1.85; }.herb-sidebar-facts { grid-template-columns: 1fr; }.herb-sidebar-facts div:last-child { grid-column: auto; }.sidebar-formula-links a, .herb-sidebar-actions > a { min-height: 39px; }.version-bulk-actions { grid-template-columns: 1fr; }.version-comparison-focus .comparison-grid { gap: .55rem; } }
+@media (prefers-reduced-motion: reduce) { .passage-herb-link, .sidebar-formula-links a, .herb-sidebar-actions > a { transition: none; } }

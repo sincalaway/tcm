@@ -23,6 +23,7 @@ import {
   buildCitationFilename,
   triggerPrint,
 } from "@/lib/citationExport";
+import { getClassicStudyNotes, getHerbPairings } from "@/data/shangHanStudyIndex";
 
 export default function Classics() {
   const { isAuthenticated } = useAuth();
@@ -269,6 +270,8 @@ type PassageFormulaRecord = {
   sourceTitle: string;
   relationType: "primary" | "related";
 };
+const MAX_COMPARE_EDITIONS = 4;
+
 type PassageVersionRecord = {
   id: number;
   editionLabel: string;
@@ -312,9 +315,8 @@ function ClassicLeaf({
   const [chapterQuery, setChapterQuery] = useState("");
   const [passageQuery, setPassageQuery] = useState("");
   const [versionFilter, setVersionFilter] = useState("");
-  const [compareEditionLabels, setCompareEditionLabels] = useState<string[]>(
-    []
-  );
+  const [compareEditionLabels, setCompareEditionLabels] = useState<string[]>([]);
+  const [sidebarHerb, setSidebarHerb] = useState<PassageHerbRecord | null>(null);
 
   useEffect(() => {
     const match = preferredChapterTitle
@@ -407,13 +409,14 @@ function ClassicLeaf({
   useEffect(() => {
     setVersionFilter("");
     setCompareEditionLabels([]);
+    setSidebarHerb(null);
   }, [activePassage?.id]);
 
   const toggleEditionComparison = (editionLabel: string) => {
     setCompareEditionLabels(current => {
       if (current.includes(editionLabel))
         return current.filter(item => item !== editionLabel);
-      if (current.length >= 2) return current;
+      if (current.length >= MAX_COMPARE_EDITIONS) return current;
       return [...current, editionLabel];
     });
   };
@@ -421,6 +424,14 @@ function ClassicLeaf({
   const comparisonVersions = versions.filter(version =>
     compareEditionLabels.includes(version.editionLabel)
   );
+  const addVisibleEditions = () => {
+    setCompareEditionLabels(
+      Array.from(new Set(visibleVersions.map(version => version.editionLabel))).slice(
+        0,
+        MAX_COMPARE_EDITIONS
+      )
+    );
+  };
   const excerpt = activePassage?.excerpt ?? activeChapter?.excerpt ?? undefined;
   const title = activePassage
     ? `${classic.title} · ${activePassage.title}`
@@ -581,31 +592,43 @@ function ClassicLeaf({
               ) : null}
             </>
           ) : null}
-          <blockquote>
-            “
+          <div className="passage-reading-layout">
+            <div className="passage-reading-main">
+              <blockquote>
+                “
+                {activePassage ? (
+                  <PassageHerbLinks
+                    text={activePassage.excerpt}
+                    herbs={herbRecords}
+                    onSelectHerb={setSidebarHerb}
+                  />
+                ) : (
+                  excerpt
+                )}
+                ”
+              </blockquote>
+              {activePassage && herbDirectoryQuery.isLoading ? (
+                <p className="passage-herb-loading">正在关联本草目录……</p>
+              ) : null}
+              {activePassage ? (
+                <p className="passage-herb-hint">
+                  点击条文中的棕色药名，在右侧展开本草、配伍与方剂检索索引。
+                </p>
+              ) : null}
+              {activePassage ? (
+                <p className="passage-meta">
+                  {activePassage.sourceReference} · {activePassage.keywords}
+                </p>
+              ) : null}
+            </div>
             {activePassage ? (
-              <PassageHerbLinks
-                text={activePassage.excerpt}
-                herbs={herbRecords}
+              <HerbStudySidebar
+                herb={sidebarHerb}
+                passageFormulas={passageFormulas}
+                onClose={() => setSidebarHerb(null)}
               />
-            ) : (
-              excerpt
-            )}
-            ”
-          </blockquote>
-          {activePassage && herbDirectoryQuery.isLoading ? (
-            <p className="passage-herb-loading">正在关联本草目录……</p>
-          ) : null}
-          {activePassage ? (
-            <p className="passage-herb-hint">
-              文中棕色药名可点击查看本草索引与关联经方。
-            </p>
-          ) : null}
-          {activePassage ? (
-            <p className="passage-meta">
-              {activePassage.sourceReference} · {activePassage.keywords}
-            </p>
-          ) : null}
+            ) : null}
+          </div>
           {activePassage && versions.length ? (
             <section
               className="passage-versions"
@@ -634,20 +657,27 @@ function ClassicLeaf({
                   </select>
                 </label>
                 <p>
-                  显示 {visibleVersions.length} / {versions.length}{" "}
-                  版；可加入两版进行聚焦对读。
+                  显示 {visibleVersions.length} / {versions.length} 版；最多可选 {MAX_COMPARE_EDITIONS} 版同屏对读。
                 </p>
+                <div className="version-bulk-actions">
+                  <button type="button" onClick={addVisibleEditions} disabled={!visibleVersions.length}>
+                    加入当前可见版本
+                  </button>
+                  <button type="button" onClick={() => setCompareEditionLabels([])} disabled={!compareEditionLabels.length}>
+                    清空对读
+                  </button>
+                </div>
               </div>
               {comparisonVersions.length ? (
                 <div
-                  className={`version-comparison-focus ${comparisonVersions.length === 2 ? "ready" : ""}`}
+                  className={`version-comparison-focus count-${comparisonVersions.length} ${comparisonVersions.length >= 2 ? "ready" : ""}`}
                 >
                   <div>
                     <RuleLabel>聚焦对读</RuleLabel>
                     <p>
-                      {comparisonVersions.length === 2
-                        ? "已选两版，以下并列呈现其文字与异文注记。"
-                        : "已选一版；再从下方加入一版即可进行并列对读。"}
+                      {comparisonVersions.length >= 2
+                        ? `已选 ${comparisonVersions.length} 版；以下按同一条文并列呈现文字与异文注记。`
+                        : "已选一版；再从下方加入至少一版即可进行并列对读。"}
                     </p>
                   </div>
                   <div className="passage-version-grid comparison-grid">
@@ -781,7 +811,7 @@ function VersionCard({
   onToggle: (editionLabel: string) => void;
   compareCount: number;
 }) {
-  const cannotAdd = !selected && compareCount >= 2;
+  const cannotAdd = !selected && compareCount >= MAX_COMPARE_EDITIONS;
   return (
     <article
       className={`passage-version-card ${selected ? "is-selected" : ""}`}
@@ -806,12 +836,118 @@ function VersionCard({
           disabled={cannotAdd}
           aria-pressed={selected}
         >
-          {selected ? "移出对读" : cannotAdd ? "已达两版上限" : "加入对读"}
+          {selected ? "移出对读" : cannotAdd ? `已达 ${MAX_COMPARE_EDITIONS} 版上限` : "加入对读"}
         </button>
         <a href={version.sourceUrl} target="_blank" rel="noreferrer">
           {version.sourceReference} <ExternalLink size={13} />
         </a>
       </div>
     </article>
+  );
+}
+
+function HerbStudySidebar({
+  herb,
+  passageFormulas,
+  onClose,
+}: {
+  herb: PassageHerbRecord | null;
+  passageFormulas: PassageFormulaRecord[];
+  onClose: () => void;
+}) {
+  const pairings = herb ? getHerbPairings(herb.name) : [];
+  const studyNotes = herb ? getClassicStudyNotes(herb.name) : [];
+
+  return (
+    <aside className="herb-study-sidebar" aria-live="polite">
+      {herb ? (
+        <>
+          <header className="herb-sidebar-header">
+            <div>
+              <RuleLabel>条文药材侧栏</RuleLabel>
+              <h3>{herb.name}</h3>
+              <p>{herb.pinyin ?? "本草索引"} · {herb.category ?? "本草目录"}</p>
+            </div>
+            <button type="button" onClick={onClose} aria-label="关闭药材侧边栏">
+              收起
+            </button>
+          </header>
+
+          <dl className="herb-sidebar-facts">
+            <div><dt>性味</dt><dd>{[herb.nature, herb.taste].filter(Boolean).join(" · ") || "—"}</dd></div>
+            <div><dt>归经</dt><dd>{herb.meridians ?? "—"}</dd></div>
+            <div><dt>别名</dt><dd>{herb.aliases ?? "—"}</dd></div>
+          </dl>
+
+          <section className="herb-sidebar-section">
+            <RuleLabel>原典配伍规律</RuleLabel>
+            {pairings.length ? (
+              <div className="pairing-stack">
+                {pairings.map(pairing => (
+                  <article key={`${pairing.herbName}-${pairing.formulaName}`}>
+                    <Link href={`/jingfang?q=${encodeURIComponent(pairing.formulaName)}`}>
+                      <b>{pairing.formulaName}</b>
+                      <span>{[pairing.herbName, ...pairing.companionNames].join(" · ")}</span>
+                    </Link>
+                    <p>{pairing.studyFocus}</p>
+                    <a href={pairing.sourceUrl} target="_blank" rel="noreferrer">
+                      {pairing.sourceLabel} <ExternalLink size={12} />
+                    </a>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p className="sidebar-empty">当前索引尚未收录固定配伍条目；可从方剂库继续检索。</p>
+            )}
+          </section>
+
+          <section className="herb-sidebar-section">
+            <RuleLabel>方剂检索扩展</RuleLabel>
+            <div className="sidebar-formula-links">
+              <Link href={`/jingfang?q=${encodeURIComponent(herb.name)}`}>
+                检索全部含“{herb.name}”的站内经方
+              </Link>
+              {passageFormulas.map(formula => (
+                <Link key={formula.id} href={`/jingfang?q=${encodeURIComponent(formula.name)}`}>
+                  <span>{formula.relationType === "primary" ? "本条主方" : "本条相关方"}</span>
+                  {formula.name}
+                </Link>
+              ))}
+            </div>
+          </section>
+
+          <section className="herb-sidebar-section">
+            <RuleLabel>历代经典研读索引</RuleLabel>
+            {studyNotes.length ? (
+              <div className="classic-study-stack">
+                {studyNotes.map(note => (
+                  <article key={`${note.scholar}-${note.work}`}>
+                    <header><b>{note.scholar}</b><span>{note.era}</span></header>
+                    <p><em>{note.work}</em>：{note.focus}</p>
+                    <a href={note.sourceUrl} target="_blank" rel="noreferrer">
+                      {note.sourceLabel} <ExternalLink size={12} />
+                    </a>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p className="sidebar-empty">该药材的历代研读索引正在整理中；可先打开完整本草条目交叉阅读。</p>
+            )}
+          </section>
+
+          <div className="herb-sidebar-actions">
+            <Link href={`/bencao?q=${encodeURIComponent(herb.name)}`}>打开完整本草条目</Link>
+            {herb.sourceUrl ? <a href={herb.sourceUrl} target="_blank" rel="noreferrer">药典目录入口 <ExternalLink size={12} /></a> : null}
+          </div>
+          <p className="herb-sidebar-disclaimer">配伍与医家内容用于文本检索和版本化研读，不构成诊断、处方、剂量或自行用药建议。</p>
+        </>
+      ) : (
+        <div className="herb-sidebar-placeholder">
+          <RuleLabel>条文药材侧栏</RuleLabel>
+          <h3>点击正文中的药名</h3>
+          <p>在此查看本草索引、原典配伍、方剂扩展检索及历代医家研读入口。</p>
+        </div>
+      )}
+    </aside>
   );
 }
