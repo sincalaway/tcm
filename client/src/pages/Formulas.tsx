@@ -1,5 +1,5 @@
 /** 宋刻书斋：经方页读取数据库条目，按方名、出处和药味全文检索。 */
-import { Calculator, Lightbulb, Search, SlidersHorizontal } from "lucide-react";
+import { Calculator, Lightbulb, ListChecks, Search, SlidersHorizontal } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearch } from "wouter";
 import { PageMasthead } from "@/components/SiteChrome";
@@ -8,12 +8,14 @@ import { AiStudyAssistant } from "@/components/AiStudyAssistant";
 import { StudyMargin } from "@/components/StudyMargin";
 import { trpc } from "@/lib/trpc";
 import { ancientMeasureUnits, convertAncientMeasure, formatConvertedValue, weightStandards, type AncientMeasureUnit } from "@/lib/ancientMeasures";
+import { generateDecoctionStudyGuide } from "@/lib/decoctionGuide";
 
 export default function Formulas() {
   const search = useSearch(); const initialQuery = new URLSearchParams(search).get("q") ?? "";
   const [query, setQuery] = useState(initialQuery); const [sourceTitle, setSourceTitle] = useState(""); const [selectedId, setSelectedId] = useState<number | null>(null);
   const [studyQuery, setStudyQuery] = useState(""); const [matchMode, setMatchMode] = useState<"all" | "any">("all");
   const [measureAmount, setMeasureAmount] = useState("1"); const [measureUnit, setMeasureUnit] = useState<AncientMeasureUnit>("liang"); const [weightStandardId, setWeightStandardId] = useState(weightStandards[0].id);
+  const [decoctionIngredients, setDecoctionIngredients] = useState(""); const [decoctionGuideOpen, setDecoctionGuideOpen] = useState(false);
   const detailRef = useRef<HTMLDivElement>(null);
   useEffect(() => { setQuery(new URLSearchParams(search).get("q") ?? ""); setSelectedId(null); }, [search]);
   const filters = trpc.catalog.filters.useQuery();
@@ -21,10 +23,12 @@ export default function Formulas() {
   const records = recordsQuery.data ?? []; const selected = records.find((record) => record.id === selectedId) ?? records[0];
   const studySearchQuery = trpc.catalog.formulaStudySearch.useQuery({ query: studyQuery.trim() || undefined, sourceTitle: sourceTitle || undefined, matchMode }, { enabled: Boolean(studyQuery.trim()) });
   const conversion = useMemo(() => convertAncientMeasure(Number(measureAmount), measureUnit, weightStandardId), [measureAmount, measureUnit, weightStandardId]);
+  const selectedIngredientNames = useMemo(() => { try { return selected ? JSON.parse(selected.ingredients) as string[] : []; } catch { return []; } }, [selected]);
+  const decoctionGuide = useMemo(() => generateDecoctionStudyGuide(decoctionIngredients), [decoctionIngredients]);
   function selectFormula(id: number, resetDirectoryQuery = false) { if (resetDirectoryQuery) setQuery(""); setSelectedId(id); window.setTimeout(() => detailRef.current?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "nearest" }), 0); }
   return <main className="inner-page"><PageMasthead index="乙 · 经方研读" title="经方详情查询" lead="以出处为锚，以药味为线，在可维护目录中检索并保存阅读线索。" />
     <section className="catalog-controls"><label className="catalog-search"><Search size={18} /><span className="sr-only">搜索经方条目</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="检索方名、出处、条文或组成药味" /></label><div className="facet-set"><SlidersHorizontal size={16} /><Facet label="出处" value={sourceTitle} onChange={setSourceTitle} options={filters.data?.formulaSources ?? []} /></div><p>{recordsQuery.isLoading ? "正在翻检方目……" : `共得 ${records.length} 首方剂`}<button type="button" onClick={() => { setQuery(""); setSourceTitle(""); }}>清除筛选</button></p></section>
-    <FormulaStudyTools studyQuery={studyQuery} onStudyQueryChange={setStudyQuery} matchMode={matchMode} onMatchModeChange={setMatchMode} searchResult={studySearchQuery.data ?? []} searchLoading={studySearchQuery.isFetching} onSelectFormula={(id) => selectFormula(id, true)} measureAmount={measureAmount} onMeasureAmountChange={setMeasureAmount} measureUnit={measureUnit} onMeasureUnitChange={setMeasureUnit} weightStandardId={weightStandardId} onWeightStandardChange={setWeightStandardId} conversion={conversion} />
+    <FormulaStudyTools studyQuery={studyQuery} onStudyQueryChange={setStudyQuery} matchMode={matchMode} onMatchModeChange={setMatchMode} searchResult={studySearchQuery.data ?? []} searchLoading={studySearchQuery.isFetching} onSelectFormula={(id) => selectFormula(id, true)} measureAmount={measureAmount} onMeasureAmountChange={setMeasureAmount} measureUnit={measureUnit} onMeasureUnitChange={setMeasureUnit} weightStandardId={weightStandardId} onWeightStandardChange={setWeightStandardId} conversion={conversion} decoctionIngredients={decoctionIngredients} onDecoctionIngredientsChange={(value) => { setDecoctionIngredients(value); setDecoctionGuideOpen(false); }} selectedFormulaName={selected?.name ?? null} selectedIngredientNames={selectedIngredientNames} onUseSelectedFormula={() => { setDecoctionIngredients(selectedIngredientNames.join("、")); setDecoctionGuideOpen(false); }} onGenerateDecoctionGuide={() => setDecoctionGuideOpen(true)} decoctionGuideOpen={decoctionGuideOpen} decoctionGuide={decoctionGuide} />
     <section className={`study-board formula-board ${recordsQuery.isLoading ? "is-loading" : ""}`} aria-busy={recordsQuery.isLoading}><div className="study-list-panel"><div className="panel-heading"><div><RuleLabel>方目</RuleLabel><h2>经方索引</h2></div><span className="result-count">来源可溯</span></div><div className="formula-list">{recordsQuery.isLoading && !records.length ? Array.from({ length: 5 }, (_, index) => <div className="formula-row skeleton-row" key={index}><span /><div><b /><small /></div><i /></div>) : records.map((formula, index) => <button className={selected?.id === formula.id ? "formula-row active" : "formula-row"} type="button" key={formula.id} onClick={() => selectFormula(formula.id)}><span>{String(index + 1).padStart(2, "0")}</span><div><b>{formula.name}</b><small>{formula.sourceTitle}</small></div><i>{formula.studyIndex?.split(" · ")[0]}</i></button>)}{!recordsQuery.isLoading && !records.length ? <p className="empty-note">未找到相符方剂。可从“桂枝”“伤寒论”或“茯苓”开始。</p> : null}</div></div>{selected ? <div ref={detailRef} className="detail-anchor"><FormulaDetail formula={selected} /></div> : recordsQuery.isLoading ? <div className="empty-leaf detail-skeleton"><p>正在展开经方书页……</p></div> : <div className="empty-leaf"><p>从左侧方目选择一首方剂。</p></div>}</section>
     <aside className="method-note"><InkStamp>阅方次第</InkStamp><p>先确认原典出处与条文，再观察药味组合与上下文。页面用于文本学习，不替代辨证、配伍或用药决策。</p><ExternalSource href="https://zh.wikisource.org/wiki/%E5%82%B7%E5%AF%92%E8%AB%96">打开《伤寒论》原文阅览入口</ExternalSource></aside>
   </main>;
@@ -66,6 +70,14 @@ function FormulaStudyTools({
   weightStandardId,
   onWeightStandardChange,
   conversion,
+  decoctionIngredients,
+  onDecoctionIngredientsChange,
+  selectedFormulaName,
+  selectedIngredientNames,
+  onUseSelectedFormula,
+  onGenerateDecoctionGuide,
+  decoctionGuideOpen,
+  decoctionGuide,
 }: {
   studyQuery: string;
   onStudyQueryChange: (value: string) => void;
@@ -81,6 +93,14 @@ function FormulaStudyTools({
   weightStandardId: (typeof weightStandards)[number]["id"];
   onWeightStandardChange: (value: (typeof weightStandards)[number]["id"]) => void;
   conversion: ReturnType<typeof convertAncientMeasure>;
+  decoctionIngredients: string;
+  onDecoctionIngredientsChange: (value: string) => void;
+  selectedFormulaName: string | null;
+  selectedIngredientNames: string[];
+  onUseSelectedFormula: () => void;
+  onGenerateDecoctionGuide: () => void;
+  decoctionGuideOpen: boolean;
+  decoctionGuide: ReturnType<typeof generateDecoctionStudyGuide>;
 }) {
   return (
     <section className="formula-study-tools" aria-label="经方药证学习检索与古今衡重换算">
@@ -107,6 +127,13 @@ function FormulaStudyTools({
           <div className="measure-result"><span>换算结果</span><b>≈ {formatConvertedValue(conversion.value)} {conversion.unit}</b><small>{conversion.formula}</small></div>
           <p className="measure-source">{conversion.standard.description} <a href={conversion.standard.sourceUrl} target="_blank" rel="noreferrer">查看来源：{conversion.standard.sourceLabel}</a></p>
           <p className="measure-disclaimer">此工具仅用于古籍计量与不同研究口径的学习对照。原方剂量、炮制、煎服法和个体情况均不可由通用换算推导；请勿据此自行调整或使用药物。</p>
+        </section>
+
+        <section className="formula-tool-card decoction-guide-card">
+          <header><ListChecks size={18} /><div><h3>复方煎煮研读提示</h3><p>输入复方药味，生成“先煎、常规煎煮、后下、煎后核对”的学习流程草案；处方、药房标签和医嘱始终优先。</p></div></header>
+          <label className="decoction-input"><span>复方药味</span><textarea value={decoctionIngredients} onChange={event => onDecoctionIngredientsChange(event.target.value)} placeholder="例如：附子、干姜、炙甘草、牡蛎；以顿号、逗号或换行分隔" maxLength={800} rows={3} /></label>
+          <div className="decoction-actions">{selectedFormulaName && selectedIngredientNames.length ? <button type="button" className="decoction-fill" onClick={onUseSelectedFormula}>填入当前方剂：{selectedFormulaName}</button> : <span>从经方目录选择方剂后，可一键带入其组成药味。</span>}<button type="button" className="decoction-generate" onClick={onGenerateDecoctionGuide} disabled={!decoctionIngredients.trim()}>生成煎煮研读提示</button></div>
+          {decoctionGuideOpen ? <div className="decoction-guide-result" aria-live="polite"><p className="decoction-notice">{decoctionGuide.notice}</p>{decoctionGuide.ingredients.length ? <p className="decoction-ingredients">已识别药味：{decoctionGuide.ingredients.join("、")}</p> : null}<ol>{decoctionGuide.stages.map((stage, index) => <li className={stage.emphasis === "attention" ? "is-attention" : ""} key={stage.id}><span>{String(index + 1).padStart(2, "0")}</span><div><b>{stage.title}</b><p>{stage.body}</p></div></li>)}</ol><p className="decoction-sources">来源：{decoctionGuide.sources.map((source, index) => <a key={source.url} href={source.url} target="_blank" rel="noreferrer">{index ? "；" : ""}{source.label}</a>)}</p></div> : <p className="tool-empty">生成结果会明确列出需要人工核对的特殊煎法，不自动决定煎煮时长、加水量、分服次数或服用时间。</p>}
         </section>
       </div>
     </section>

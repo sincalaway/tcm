@@ -8,6 +8,10 @@ import {
   buildStudyArchiveMarkdown,
 } from "../client/src/lib/studyArchive";
 import {
+  generateDecoctionStudyGuide,
+  parseDecoctionIngredients,
+} from "../client/src/lib/decoctionGuide";
+import {
   parseFormulaStudyTerms,
   searchFormulaStudyRecords,
 } from "./formulaStudySearch";
@@ -61,6 +65,23 @@ describe("formula study tools", () => {
       unit: "mL",
     });
     expect(formatConvertedValue(13.75)).toBe("13.75");
+  });
+
+  it("builds a source-backed decoction study checklist without turning it into a prescription", () => {
+    expect(parseDecoctionIngredients("附子、牡蛎，薄荷 附子")).toEqual([
+      "附子",
+      "牡蛎",
+      "薄荷",
+    ]);
+    const guide = generateDecoctionStudyGuide("附子、牡蛎、薄荷、炙甘草");
+
+    expect(guide.predecoctionCandidates).toEqual(["附子", "牡蛎"]);
+    expect(guide.lateAdditionCandidates).toEqual(["薄荷"]);
+    expect(guide.stages.map(stage => stage.id)).toEqual(
+      expect.arrayContaining(["check", "predecoct", "regular", "late-add", "serve"])
+    );
+    expect(guide.notice).toContain("不构成");
+    expect(guide.sources.every(source => source.url.startsWith("http"))).toBe(true);
   });
 
   it("exports only supplied personal study records to portable Markdown and JSON", () => {
