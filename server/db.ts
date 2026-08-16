@@ -27,6 +27,7 @@ import { chapterSeed, classicSeed, formulaPassageSeed, formulaSeed, herbSeed, pa
 import { ENV } from "./_core/env";
 import { storageGetSignedUrl, storagePut } from "./storage";
 import { extractText } from "unpdf";
+import { searchFormulaStudyRecords, type FormulaStudyMatchMode } from "./formulaStudySearch";
 
 export type ResourceType = "herb" | "formula" | "classic" | "chapter";
 const KNOWLEDGE_ALLOWED_TYPES = new Set(["text/plain", "text/markdown", "application/pdf"]);
@@ -177,6 +178,14 @@ export async function getFormulas(input: { query?: string; sourceTitle?: string 
   if (input.query) conditions.push(includesQuery(input.query, [formulas.name, formulas.aliases, formulas.sourceTitle, formulas.studyIndex, formulas.ingredients]));
   if (input.sourceTitle) conditions.push(eq(formulas.sourceTitle, input.sourceTitle));
   return db.select().from(formulas).where(conditions.length ? and(...conditions) : undefined).orderBy(formulas.name);
+}
+
+export async function getFormulaStudySearch(input: { query?: string; sourceTitle?: string; matchMode?: FormulaStudyMatchMode }) {
+  await ensureCatalogSeed();
+  const db = await getDb();
+  if (!db) return [];
+  const records = await db.select().from(formulas).orderBy(formulas.name);
+  return searchFormulaStudyRecords(records, input);
 }
 
 export async function getClassics(input: { query?: string; category?: string }) {

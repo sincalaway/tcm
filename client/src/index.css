@@ -345,3 +345,53 @@ h1, h2, h3 { font-family: "Noto Serif SC", serif; color: var(--ink); letter-spac
 @media (max-width: 700px) { .classic-leaf { padding: 1.35rem 1rem; }.chapter-block ol { grid-template-columns: 1fr; }.passage-block { padding: .9rem; }.herb-study-sidebar { padding: .85rem; }.version-filter-bar { grid-template-columns: 1fr; align-items: stretch; }.version-filter-bar .facet-select { width: 100%; }.version-bulk-actions { display: grid; grid-template-columns: 1fr 1fr; }.version-bulk-actions button { min-height: 38px; }.version-comparison-focus { margin-right: -.2rem; margin-left: -.2rem; padding: .72rem; }.version-comparison-focus.count-2 .comparison-grid { grid-template-columns: repeat(2, minmax(245px, 1fr)); }.version-comparison-focus.count-3 .comparison-grid { grid-template-columns: repeat(3, minmax(245px, 1fr)); }.version-comparison-focus.count-4 .comparison-grid { grid-template-columns: repeat(4, minmax(245px, 1fr)); }.passage-version-card { min-width: 0; } }
 @media (max-width: 480px) { .leaf-title { align-items: flex-start; margin: 1.3rem 0 .8rem; }.leaf-title h2 { font-size: 2.1rem; }.passage-block blockquote { font-size: 1rem; line-height: 1.85; }.herb-sidebar-facts { grid-template-columns: 1fr; }.herb-sidebar-facts div:last-child { grid-column: auto; }.sidebar-formula-links a, .herb-sidebar-actions > a { min-height: 39px; }.version-bulk-actions { grid-template-columns: 1fr; }.version-comparison-focus .comparison-grid { gap: .55rem; } }
 @media (prefers-reduced-motion: reduce) { .passage-herb-link, .sidebar-formula-links a, .herb-sidebar-actions > a { transition: none; } }
+
+
+/* 经方药证检索、古今衡重换算与书案导出 */
+.formula-study-tools { margin: 1.1rem 0 1.6rem; border: 1px solid var(--line); border-top: 3px solid var(--cinnabar); padding: clamp(1rem, 2.4vw, 1.5rem); background: rgba(255,253,248,.64); box-shadow: 5px 7px 0 rgba(23,59,58,.07); }
+.formula-tools-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.formula-tools-heading h2 { margin: .25rem 0 .32rem; font-family: "Noto Serif SC", serif; font-size: clamp(1.25rem, 2.2vw, 1.75rem); }
+.formula-tools-heading p { max-width: 680px; margin: 0; color: var(--ink-soft); font-size: .72rem; line-height: 1.7; }
+.formula-tools-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .9rem; margin-top: 1rem; }
+.formula-tool-card { min-width: 0; padding: .95rem; border: 1px solid var(--line); background: rgba(255,255,255,.42); }
+.formula-tool-card > header { display: flex; align-items: flex-start; gap: .55rem; }
+.formula-tool-card > header > svg { flex: 0 0 auto; margin-top: .1rem; color: var(--cinnabar); }
+.formula-tool-card h3 { margin: 0; font-family: "Noto Serif SC", serif; font-size: 1rem; }
+.formula-tool-card header p { margin: .18rem 0 0; color: var(--ink-soft); font-size: .63rem; line-height: 1.6; }
+.tool-search-input { display: flex; align-items: center; gap: .42rem; margin-top: .8rem; border: 1px solid var(--line); padding: .42rem .5rem; background: #fffdf8; }
+.tool-search-input svg { color: var(--cinnabar); }
+.tool-search-input input { width: 100%; min-width: 0; border: 0; outline: 0; color: var(--ink); background: transparent; font-family: inherit; font-size: .72rem; }
+.tool-controls, .measure-controls { display: flex; flex-wrap: wrap; align-items: end; gap: .6rem; margin-top: .65rem; }
+.tool-controls .facet-select { min-width: 145px; }
+.study-query-examples { display: flex; flex: 1; flex-wrap: wrap; gap: .35rem; }
+.study-query-examples button { border: 1px dashed rgba(165,58,44,.45); padding: .28rem .4rem; color: var(--cinnabar); background: transparent; font-size: .59rem; }
+.study-query-examples button:hover { border-style: solid; background: rgba(165,58,44,.07); }
+.study-search-results { display: grid; gap: .4rem; margin-top: .75rem; }
+.study-search-results > p, .tool-empty { margin: 0; color: var(--ink-soft); font-size: .62rem; line-height: 1.65; }
+.study-search-results button { display: grid; grid-template-columns: auto 1fr; column-gap: .45rem; padding: .48rem .55rem; border: 1px solid var(--line); color: var(--ink); background: rgba(255,255,255,.32); text-align: left; }
+.study-search-results button:hover { border-color: var(--cinnabar); background: rgba(165,58,44,.05); }
+.study-search-results button span { grid-row: 1 / span 2; align-self: start; padding: .12rem .25rem; color: var(--cinnabar); background: rgba(165,58,44,.08); font-size: .55rem; line-height: 1.45; }
+.study-search-results button b { font-family: "Noto Serif SC", serif; font-size: .76rem; }
+.study-search-results button small { margin-top: .15rem; color: var(--ink-soft); font-size: .6rem; line-height: 1.5; }
+.measure-controls > label, .measure-standard { display: grid; gap: .25rem; color: var(--ink-soft); font-size: .6rem; }
+.measure-controls input, .measure-controls select, .measure-standard select { min-height: 34px; border: 1px solid var(--line); padding: .35rem .45rem; color: var(--ink); background: #fffdf8; font-family: inherit; font-size: .68rem; }
+.measure-controls input { width: 110px; }
+.measure-standard { margin-top: .65rem; }
+.measure-standard-note { margin: .72rem 0 0; padding: .5rem .6rem; border-left: 2px solid var(--cinnabar); color: var(--ink-soft); background: rgba(165,58,44,.045); font-size: .61rem; line-height: 1.6; }
+.measure-result { display: grid; gap: .12rem; margin-top: .75rem; padding: .7rem .75rem; border-top: 1px solid var(--cinnabar); background: rgba(23,59,58,.045); }
+.measure-result > span { color: var(--ink-soft); font-size: .59rem; }
+.measure-result b { color: var(--ink); font-family: "Noto Serif SC", serif; font-size: 1.25rem; }
+.measure-result small { color: var(--ink-soft); font-size: .61rem; }
+.measure-source, .measure-disclaimer { margin: .58rem 0 0; color: var(--ink-soft); font-size: .6rem; line-height: 1.65; }
+.measure-source a { color: var(--cinnabar); text-decoration: underline; text-underline-offset: .12em; }
+.measure-disclaimer { padding-top: .55rem; border-top: 1px dotted var(--line); }
+.desk-page > header { display: flex; align-items: end; justify-content: space-between; gap: 1rem; }
+.desk-export-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: end; gap: .38rem; }
+.desk-export-actions > span { width: 100%; color: var(--ink-soft); font-size: .58rem; text-align: right; }
+.desk-export-actions button { display: inline-flex; align-items: center; gap: .28rem; border: 1px solid var(--line); padding: .36rem .5rem; color: var(--ink); background: rgba(255,255,255,.3); font-size: .62rem; }
+.desk-export-actions button:hover:not(:disabled) { border-color: var(--cinnabar); color: var(--cinnabar); }
+.desk-export-actions button:disabled { opacity: .45; cursor: not-allowed; }
+.desk-export-hint { display: flex; align-items: flex-start; gap: .3rem; margin: .55rem 0 .7rem; color: var(--ink-soft); font-size: .6rem; line-height: 1.6; }
+.desk-export-hint svg { flex: 0 0 auto; margin-top: .08rem; color: var(--cinnabar); }
+@media (max-width: 860px) { .formula-tools-grid { grid-template-columns: 1fr; }.desk-page > header { align-items: flex-start; flex-direction: column; }.desk-export-actions { justify-content: start; }.desk-export-actions > span { text-align: left; } }
+@media (max-width: 540px) { .formula-study-tools { margin-right: -.2rem; margin-left: -.2rem; padding: .85rem; }.formula-tools-heading .ink-stamp { display: none; }.tool-controls, .measure-controls { align-items: stretch; flex-direction: column; }.tool-controls .facet-select, .measure-controls > label { width: 100%; }.measure-controls input { width: 100%; box-sizing: border-box; }.study-query-examples { display: grid; grid-template-columns: 1fr; }.study-query-examples button { min-height: 35px; }.desk-export-actions { width: 100%; display: grid; grid-template-columns: 1fr 1fr; }.desk-export-actions > span { grid-column: 1 / -1; }.desk-export-actions button { justify-content: center; min-height: 38px; } }

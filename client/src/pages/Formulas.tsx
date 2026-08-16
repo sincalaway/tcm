@@ -1,24 +1,30 @@
 /** 宋刻书斋：经方页读取数据库条目，按方名、出处和药味全文检索。 */
-import { Search, SlidersHorizontal } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { Calculator, Lightbulb, Search, SlidersHorizontal } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearch } from "wouter";
 import { PageMasthead } from "@/components/SiteChrome";
 import { ExternalSource, InkStamp, RuleLabel, StudyDetail } from "@/components/StudyElements";
 import { AiStudyAssistant } from "@/components/AiStudyAssistant";
 import { StudyMargin } from "@/components/StudyMargin";
 import { trpc } from "@/lib/trpc";
+import { ancientMeasureUnits, convertAncientMeasure, formatConvertedValue, weightStandards, type AncientMeasureUnit } from "@/lib/ancientMeasures";
 
 export default function Formulas() {
   const search = useSearch(); const initialQuery = new URLSearchParams(search).get("q") ?? "";
   const [query, setQuery] = useState(initialQuery); const [sourceTitle, setSourceTitle] = useState(""); const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [studyQuery, setStudyQuery] = useState(""); const [matchMode, setMatchMode] = useState<"all" | "any">("all");
+  const [measureAmount, setMeasureAmount] = useState("1"); const [measureUnit, setMeasureUnit] = useState<AncientMeasureUnit>("liang"); const [weightStandardId, setWeightStandardId] = useState(weightStandards[0].id);
   const detailRef = useRef<HTMLDivElement>(null);
   useEffect(() => { setQuery(new URLSearchParams(search).get("q") ?? ""); setSelectedId(null); }, [search]);
   const filters = trpc.catalog.filters.useQuery();
   const recordsQuery = trpc.catalog.formulas.useQuery({ query: query || undefined, sourceTitle: sourceTitle || undefined });
   const records = recordsQuery.data ?? []; const selected = records.find((record) => record.id === selectedId) ?? records[0];
-  function selectFormula(id: number) { setSelectedId(id); window.setTimeout(() => detailRef.current?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "nearest" }), 0); }
+  const studySearchQuery = trpc.catalog.formulaStudySearch.useQuery({ query: studyQuery.trim() || undefined, sourceTitle: sourceTitle || undefined, matchMode }, { enabled: Boolean(studyQuery.trim()) });
+  const conversion = useMemo(() => convertAncientMeasure(Number(measureAmount), measureUnit, weightStandardId), [measureAmount, measureUnit, weightStandardId]);
+  function selectFormula(id: number, resetDirectoryQuery = false) { if (resetDirectoryQuery) setQuery(""); setSelectedId(id); window.setTimeout(() => detailRef.current?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "nearest" }), 0); }
   return <main className="inner-page"><PageMasthead index="乙 · 经方研读" title="经方详情查询" lead="以出处为锚，以药味为线，在可维护目录中检索并保存阅读线索。" />
     <section className="catalog-controls"><label className="catalog-search"><Search size={18} /><span className="sr-only">搜索经方条目</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="检索方名、出处、条文或组成药味" /></label><div className="facet-set"><SlidersHorizontal size={16} /><Facet label="出处" value={sourceTitle} onChange={setSourceTitle} options={filters.data?.formulaSources ?? []} /></div><p>{recordsQuery.isLoading ? "正在翻检方目……" : `共得 ${records.length} 首方剂`}<button type="button" onClick={() => { setQuery(""); setSourceTitle(""); }}>清除筛选</button></p></section>
+    <FormulaStudyTools studyQuery={studyQuery} onStudyQueryChange={setStudyQuery} matchMode={matchMode} onMatchModeChange={setMatchMode} searchResult={studySearchQuery.data ?? []} searchLoading={studySearchQuery.isFetching} onSelectFormula={(id) => selectFormula(id, true)} measureAmount={measureAmount} onMeasureAmountChange={setMeasureAmount} measureUnit={measureUnit} onMeasureUnitChange={setMeasureUnit} weightStandardId={weightStandardId} onWeightStandardChange={setWeightStandardId} conversion={conversion} />
     <section className={`study-board formula-board ${recordsQuery.isLoading ? "is-loading" : ""}`} aria-busy={recordsQuery.isLoading}><div className="study-list-panel"><div className="panel-heading"><div><RuleLabel>方目</RuleLabel><h2>经方索引</h2></div><span className="result-count">来源可溯</span></div><div className="formula-list">{recordsQuery.isLoading && !records.length ? Array.from({ length: 5 }, (_, index) => <div className="formula-row skeleton-row" key={index}><span /><div><b /><small /></div><i /></div>) : records.map((formula, index) => <button className={selected?.id === formula.id ? "formula-row active" : "formula-row"} type="button" key={formula.id} onClick={() => selectFormula(formula.id)}><span>{String(index + 1).padStart(2, "0")}</span><div><b>{formula.name}</b><small>{formula.sourceTitle}</small></div><i>{formula.studyIndex?.split(" · ")[0]}</i></button>)}{!recordsQuery.isLoading && !records.length ? <p className="empty-note">未找到相符方剂。可从“桂枝”“伤寒论”或“茯苓”开始。</p> : null}</div></div>{selected ? <div ref={detailRef} className="detail-anchor"><FormulaDetail formula={selected} /></div> : recordsQuery.isLoading ? <div className="empty-leaf detail-skeleton"><p>正在展开经方书页……</p></div> : <div className="empty-leaf"><p>从左侧方目选择一首方剂。</p></div>}</section>
     <aside className="method-note"><InkStamp>阅方次第</InkStamp><p>先确认原典出处与条文，再观察药味组合与上下文。页面用于文本学习，不替代辨证、配伍或用药决策。</p><ExternalSource href="https://zh.wikisource.org/wiki/%E5%82%B7%E5%AF%92%E8%AB%96">打开《伤寒论》原文阅览入口</ExternalSource></aside>
   </main>;
@@ -36,3 +42,73 @@ function FormulaPassageLinks({ formulaId, formulaName }: { formulaId: number; fo
 }
 
 function resolveFormulaChapter(formula: FormulaRecord) { if (formula.sourceTitle === "《伤寒论》") { if (formula.name === "大承气汤") return "辨阳明病脉证并治"; if (formula.name === "小柴胡汤") return "辨少阳病脉证并治"; if (formula.name === "半夏泻心汤") return "辨发汗吐下后脉证并治"; if (formula.name === "四逆汤") return "辨少阴病脉证并治"; return "辨太阳病脉证并治"; } if (formula.sourceTitle === "《金匮要略》") return formula.name === "苓桂术甘汤" ? "痰饮咳嗽病脉证并治第十二" : "脏腑经络先后病脉证第一"; return null; }
+
+type FormulaStudySearchCard = {
+  id: number;
+  name: string;
+  sourceTitle: string;
+  matchedTerms: string[];
+  structuralNote: string | null;
+};
+
+function FormulaStudyTools({
+  studyQuery,
+  onStudyQueryChange,
+  matchMode,
+  onMatchModeChange,
+  searchResult,
+  searchLoading,
+  onSelectFormula,
+  measureAmount,
+  onMeasureAmountChange,
+  measureUnit,
+  onMeasureUnitChange,
+  weightStandardId,
+  onWeightStandardChange,
+  conversion,
+}: {
+  studyQuery: string;
+  onStudyQueryChange: (value: string) => void;
+  matchMode: "all" | "any";
+  onMatchModeChange: (value: "all" | "any") => void;
+  searchResult: FormulaStudySearchCard[];
+  searchLoading: boolean;
+  onSelectFormula: (id: number) => void;
+  measureAmount: string;
+  onMeasureAmountChange: (value: string) => void;
+  measureUnit: AncientMeasureUnit;
+  onMeasureUnitChange: (value: AncientMeasureUnit) => void;
+  weightStandardId: (typeof weightStandards)[number]["id"];
+  onWeightStandardChange: (value: (typeof weightStandards)[number]["id"]) => void;
+  conversion: ReturnType<typeof convertAncientMeasure>;
+}) {
+  return (
+    <section className="formula-study-tools" aria-label="经方药证学习检索与古今衡重换算">
+      <header className="formula-tools-heading">
+        <div>
+          <RuleLabel>研读工具</RuleLabel>
+          <h2>药证检索与古今衡重换算</h2>
+          <p>以药名、条文症候词和学习索引交叉定位方目；衡重结果可选择不同研究口径进行文献对照。</p>
+        </div>
+        <InkStamp>考</InkStamp>
+      </header>
+      <div className="formula-tools-grid">
+        <section className="formula-tool-card">
+          <header><Lightbulb size={18} /><div><h3>药证学习检索</h3><p>例如输入“桂枝 汗出 恶风”或“柴胡 往来寒热”。</p></div></header>
+          <label className="tool-search-input"><Search size={15} /><span className="sr-only">输入药名或症候词</span><input value={studyQuery} onChange={event => onStudyQueryChange(event.target.value)} placeholder="多个关键词以空格、顿号或逗号分隔" maxLength={100} /></label>
+          <div className="tool-controls"><label className="facet-select"><span>匹配方式</span><select value={matchMode} onChange={event => onMatchModeChange(event.target.value as "all" | "any")}><option value="all">同时命中全部词</option><option value="any">命中任一词</option></select></label><div className="study-query-examples"><button type="button" onClick={() => onStudyQueryChange("桂枝 汗出 恶风")}>桂枝 · 汗出 · 恶风</button><button type="button" onClick={() => onStudyQueryChange("柴胡 往来寒热")}>柴胡 · 往来寒热</button></div></div>
+          {studyQuery.trim() ? <div className="study-search-results" aria-live="polite">{searchLoading ? <p>正在核对方名、药味与条文索引……</p> : searchResult.length ? <><p>命中 {searchResult.length} 首方剂；结果依据站内方名、别名、药味、原文摘录和学习索引排序。</p>{searchResult.slice(0, 6).map(item => <button type="button" key={item.id} onClick={() => onSelectFormula(item.id)}><span>{item.matchedTerms.join(" · ")}</span><b>{item.name}</b><small>{item.sourceTitle}{item.structuralNote ? ` · ${item.structuralNote}` : ""}</small></button>)}</> : <p>没有同时匹配的方目。可尝试减少关键词，或切换为“命中任一词”。</p>}</div> : <p className="tool-empty">输入至少一个药名、条文症候词或结构关键词后开始检索。</p>}
+        </section>
+
+        <section className="formula-tool-card measure-tool-card">
+          <header><Calculator size={18} /><div><h3>古今衡重换算</h3><p>支持两、铢、斤及升、合、斗；每次换算均保留所选研究口径。</p></div></header>
+          <div className="measure-controls"><label><span>原文数值</span><input value={measureAmount} onChange={event => onMeasureAmountChange(event.target.value)} type="number" min="0" step="any" inputMode="decimal" /></label><label><span>原文单位</span><select value={measureUnit} onChange={event => onMeasureUnitChange(event.target.value as AncientMeasureUnit)}>{ancientMeasureUnits.map(unit => <option key={unit.value} value={unit.value}>{unit.label}</option>)}</select></label></div>
+          {ancientMeasureUnits.find(unit => unit.value === measureUnit)?.kind === "weight" ? <label className="measure-standard"><span>研究口径</span><select value={weightStandardId} onChange={event => onWeightStandardChange(event.target.value as (typeof weightStandards)[number]["id"])}>{weightStandards.map(standard => <option key={standard.id} value={standard.id}>{standard.label}</option>)}</select></label> : <p className="measure-standard-note">容量采用研究资料中的东汉口径：1 升约 200 mL；固体药材的体积不能通用地换算为克。</p>}
+          <div className="measure-result"><span>换算结果</span><b>≈ {formatConvertedValue(conversion.value)} {conversion.unit}</b><small>{conversion.formula}</small></div>
+          <p className="measure-source">{conversion.standard.description} <a href={conversion.standard.sourceUrl} target="_blank" rel="noreferrer">查看来源：{conversion.standard.sourceLabel}</a></p>
+          <p className="measure-disclaimer">此工具仅用于古籍计量与不同研究口径的学习对照。原方剂量、炮制、煎服法和个体情况均不可由通用换算推导；请勿据此自行调整或使用药物。</p>
+        </section>
+      </div>
+    </section>
+  );
+}

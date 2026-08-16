@@ -52,6 +52,8 @@ export function StudyMargin({ resourceType, resourceId, resourceTitle }: { resou
   const resetDraft = () => { setTitle(""); setBody(""); setEditingNoteId(null); setDraftOpen(false); };
   const beginEdit = (note: { id: number; title: string; body: string }) => { setEditingNoteId(note.id); setTitle(note.title); setBody(note.body); setDraftOpen(true); };
   const submitting = createMutation.isPending || updateMutation.isPending;
+  const panelTitle = resourceType === "formula" ? "经方心得" : "我的朱批";
+  const editorPlaceholder = resourceType === "formula" ? "写下药证线索、方剂对读或待核对问题……" : "写下本次研读的线索、问题或关联条目……";
 
   if (!isAuthenticated) {
     return <aside className="study-margin"><NotebookPen size={18} strokeWidth={1.35} /><p>登录后可为“{resourceTitle}”留下朱批、加入收藏，并在书案中续读。</p><button type="button" onClick={() => startLogin()}>登录以记录</button></aside>;
@@ -59,10 +61,10 @@ export function StudyMargin({ resourceType, resourceId, resourceTitle }: { resou
 
   return (
     <aside className="study-margin">
-      <div className="study-margin-head"><span><NotebookPen size={16} /> 我的朱批</span><button type="button" className={isSaved ? "save-toggle saved" : "save-toggle"} onClick={() => saveMutation.mutate({ resourceType, resourceId })} disabled={saveMutation.isPending}><Bookmark size={15} fill={isSaved ? "currentColor" : "none"} />{isSaved ? "已收藏" : "收入书签"}</button></div>
+      <div className="study-margin-head"><span><NotebookPen size={16} /> {panelTitle}</span><button type="button" className={isSaved ? "save-toggle saved" : "save-toggle"} onClick={() => saveMutation.mutate({ resourceType, resourceId })} disabled={saveMutation.isPending}><Bookmark size={15} fill={isSaved ? "currentColor" : "none"} />{isSaved ? "已收藏" : "收入书签"}</button></div>
       {notesQuery.isLoading ? <p className="margin-status"><Loader2 size={14} className="spin" /> 正在展开笔记</p> : null}
       {notesQuery.data?.map((note) => <article className="margin-note" key={note.id}><div><b>{note.title}</b><span><button type="button" onClick={() => beginEdit(note)} aria-label="编辑笔记"><Pencil size={13} /></button><button type="button" onClick={() => deleteMutation.mutate({ id: note.id })} aria-label="删除笔记"><Trash2 size={13} /></button></span></div><p>{note.body}</p></article>)}
-      {draftOpen ? <form className="margin-editor" onSubmit={(event) => { event.preventDefault(); if (editingNoteId) updateMutation.mutate({ id: editingNoteId, title, body }); else createMutation.mutate({ resourceType, resourceId, title, body }); }}><input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="笔记标题" maxLength={255} required /><textarea value={body} onChange={(event) => setBody(event.target.value)} placeholder="写下本次研读的线索、问题或关联条目……" maxLength={10000} required /><div><button type="button" onClick={resetDraft}>取消</button><button type="submit" disabled={submitting}>{submitting ? "保存中" : editingNoteId ? "更新笔记" : "存入书案"}</button></div></form> : <button type="button" className="add-margin-note" onClick={() => { setEditingNoteId(null); setDraftOpen(true); }}><Plus size={15} /> 添加一则笔记</button>}
+      {draftOpen ? <form className="margin-editor" onSubmit={(event) => { event.preventDefault(); if (editingNoteId) updateMutation.mutate({ id: editingNoteId, title, body }); else createMutation.mutate({ resourceType, resourceId, title, body }); }}><input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="笔记标题" maxLength={255} required /><textarea value={body} onChange={(event) => setBody(event.target.value)} placeholder={editorPlaceholder} maxLength={10000} required /><div><button type="button" onClick={resetDraft}>取消</button><button type="submit" disabled={submitting}>{submitting ? "保存中" : editingNoteId ? "更新笔记" : "存入书案"}</button></div></form> : <button type="button" className="add-margin-note" onClick={() => { setEditingNoteId(null); setDraftOpen(true); }}><Plus size={15} /> 添加一则笔记</button>}
     </aside>
   );
 }

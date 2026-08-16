@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { getCatalogFilters, getClassicChapters, getClassicPassages, getClassics, getFormulaPassages, getPassageFormulas, getPassageVersions, getFormulas, getHerbs, getLocalSearch, searchWikisource } from "../db";
+import { getCatalogFilters, getClassicChapters, getClassicPassages, getClassics, getFormulaPassages, getFormulaStudySearch, getPassageFormulas, getPassageVersions, getFormulas, getHerbs, getLocalSearch, searchWikisource } from "../db";
 import { publicProcedure, router } from "../_core/trpc";
 
 const textQuery = z.string().trim().max(100).optional();
@@ -8,6 +8,7 @@ export const catalogRouter = router({
   filters: publicProcedure.query(() => getCatalogFilters()),
   herbs: publicProcedure.input(z.object({ query: textQuery, category: z.string().max(128).optional(), nature: z.string().max(64).optional(), meridian: z.string().max(128).optional() })).query(({ input }) => getHerbs(input)),
   formulas: publicProcedure.input(z.object({ query: textQuery, sourceTitle: z.string().max(255).optional() })).query(({ input }) => getFormulas(input)),
+  formulaStudySearch: publicProcedure.input(z.object({ query: textQuery, sourceTitle: z.string().max(255).optional(), matchMode: z.enum(["all", "any"]).optional() })).query(({ input }) => getFormulaStudySearch(input)),
   classics: publicProcedure.input(z.object({ query: textQuery, category: z.string().max(128).optional() })).query(({ input }) => getClassics(input)),
   chapters: publicProcedure.input(z.object({ classicId: z.number().int().positive() })).query(({ input }) => getClassicChapters(input.classicId)),
   passages: publicProcedure.input(z.object({ chapterId: z.number().int().positive() })).query(({ input }) => getClassicPassages(input.chapterId)),
