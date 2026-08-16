@@ -29,6 +29,7 @@ import { storageGetSignedUrl, storagePut } from "./storage";
 import { extractText } from "unpdf";
 import { searchFormulaStudyRecords, type FormulaStudyMatchMode } from "./formulaStudySearch";
 import type { PassageLearningRecord } from "./passageLearningMatch";
+import type { PassageMatrixRecord } from "@shared/passageComparisonMatrix";
 
 export type ResourceType = "herb" | "formula" | "classic" | "chapter";
 const KNOWLEDGE_ALLOWED_TYPES = new Set(["text/plain", "text/markdown", "application/pdf"]);
@@ -232,6 +233,54 @@ export async function getShangHanPassageLearningIndex(): Promise<PassageLearning
     .innerJoin(classics, eq(classicPassages.classicId, classics.id))
     .where(eq(classics.slug, "shang-han-lun"))
     .orderBy(classicChapters.sequence, classicPassages.passageNumber);
+}
+
+export async function getShangHanPassageMatrixRecords(passageIds: number[]): Promise<PassageMatrixRecord[]> {
+  const uniqueIds = Array.from(new Set(passageIds)).slice(0, 4);
+  if (!uniqueIds.length) return [];
+  await ensureCatalogSeed();
+  const db = await getDb();
+  if (!db) return [];
+  const records = await db.select({
+    id: classicPassages.id,
+    chapterTitle: classicChapters.title,
+    passageNumber: classicPassages.passageNumber,
+    title: classicPassages.title,
+    excerpt: classicPassages.excerpt,
+    keywords: classicPassages.keywords,
+    sourceReference: classicPassages.sourceReference,
+    sourceUrl: classicPassages.sourceUrl,
+  }).from(classicPassages)
+    .innerJoin(classicChapters, eq(classicPassages.chapterId, classicChapters.id))
+    .innerJoin(classics, eq(classicPassages.classicId, classics.id))
+    .where(and(eq(classics.slug, "shang-han-lun"), inArray(classicPassages.id, uniqueIds)));
+  if (!records.length) return [];
+  const validIds = records.map(record => record.id);
+  const [formulaRows, versionRows] = await Promise.all([
+    db.select({
+      passageId: formulaPassageMappings.passageId,
+      id: formulas.id,
+      name: formulas.name,
+      slug: formulas.slug,
+      relationType: formulaPassageMappings.relationType,
+      studyNote: formulaPassageMappings.studyNote,
+    }).from(formulaPassageMappings).innerJoin(formulas, eq(formulaPassageMappings.formulaId, formulas.id)).where(inArray(formulaPassageMappings.passageId, validIds)),
+    db.select({
+      passageId: classicPassageVersions.passageId,
+      editionLabel: classicPassageVersions.editionLabel,
+      sourceReference: classicPassageVersions.sourceReference,
+      sourceUrl: classicPassageVersions.sourceUrl,
+    }).from(classicPassageVersions).where(inArray(classicPassageVersions.passageId, validIds)).orderBy(classicPassageVersions.editionLabel),
+  ]);
+  const formulaByPassage = new Map<number, PassageMatrixRecord["formulas"]>();
+  formulaRows.forEach(row => formulaByPassage.set(row.passageId, [...(formulaByPassage.get(row.passageId) ?? []), { id: row.id, name: row.name, slug: row.slug, relationType: row.relationType, studyNote: row.studyNote }]));
+  const versionByPassage = new Map<number, PassageMatrixRecord["versions"]>();
+  versionRows.forEach(row => versionByPassage.set(row.passageId, [...(versionByPassage.get(row.passageId) ?? []), { editionLabel: row.editionLabel, sourceReference: row.sourceReference, sourceUrl: row.sourceUrl }]));
+  const byId = new Map(records.map(record => [record.id, record]));
+  return uniqueIds.flatMap(id => {
+    const record = byId.get(id);
+    return record ? [{ ...record, formulas: formulaByPassage.get(id) ?? [], versions: versionByPassage.get(id) ?? [] }] : [];
+  });
 }
 
 export async function getPassageVersions(passageId: number) {

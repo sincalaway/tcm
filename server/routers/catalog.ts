@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { getCatalogFilters, getClassicChapters, getClassicPassages, getClassics, getFormulaPassages, getFormulaStudySearch, getPassageFormulas, getPassageVersions, getFormulas, getHerbs, getLocalSearch, getShangHanPassageLearningIndex, searchWikisource } from "../db";
+import { getCatalogFilters, getClassicChapters, getClassicPassages, getClassics, getFormulaPassages, getFormulaStudySearch, getPassageFormulas, getPassageVersions, getFormulas, getHerbs, getLocalSearch, getShangHanPassageLearningIndex, getShangHanPassageMatrixRecords, searchWikisource } from "../db";
 import { matchPassageLearningRecords } from "../passageLearningMatch";
 import { publicProcedure, router } from "../_core/trpc";
 
@@ -15,6 +15,8 @@ export const catalogRouter = router({
   passages: publicProcedure.input(z.object({ chapterId: z.number().int().positive() })).query(({ input }) => getClassicPassages(input.chapterId)),
   passageVersions: publicProcedure.input(z.object({ passageId: z.number().int().positive() })).query(({ input }) => getPassageVersions(input.passageId)),
   shangHanPassageLearning: publicProcedure.input(z.object({ query: z.string().trim().max(100).optional(), perspective: z.enum(["all", "cold-heat", "sweat-fluid", "digestive", "sleep-emotion", "head-body", "chest-breathing", "limbs"]).optional(), matchMode: z.enum(["all", "any"]).optional() })).query(async ({ input }) => matchPassageLearningRecords(await getShangHanPassageLearningIndex(), input)),
+  shangHanPassageIndex: publicProcedure.query(() => getShangHanPassageLearningIndex()),
+  shangHanPassageMatrix: publicProcedure.input(z.object({ passageIds: z.array(z.number().int().positive()).min(1).max(4) })).query(({ input }) => getShangHanPassageMatrixRecords(input.passageIds)),
   formulaPassages: publicProcedure.input(z.object({ formulaId: z.number().int().positive() })).query(({ input }) => getFormulaPassages(input.formulaId)),
   passageFormulas: publicProcedure.input(z.object({ passageId: z.number().int().positive() })).query(({ input }) => getPassageFormulas(input.passageId)),
   search: publicProcedure.input(z.object({ query: z.string().trim().min(1).max(100) })).query(({ input }) => getLocalSearch(input.query)),

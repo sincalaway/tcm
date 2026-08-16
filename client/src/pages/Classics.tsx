@@ -13,6 +13,7 @@ import {
 import { AiStudyAssistant } from "@/components/AiStudyAssistant";
 import { StudyMargin } from "@/components/StudyMargin";
 import { PassageLearningMatcher } from "@/components/PassageLearningMatcher";
+import { PassageComparisonMatrix } from "@/components/PassageComparisonMatrix";
 import {
   PassageHerbLinks,
   type PassageHerbRecord,
@@ -119,6 +120,7 @@ export default function Classics() {
         </p>
       </section>
       <PassageLearningMatcher />
+      <PassageComparisonMatrix />
       <section
         className={`archive-layout ${classicsQuery.isLoading || chaptersQuery.isLoading ? "is-loading" : ""}`}
         aria-busy={classicsQuery.isLoading || chaptersQuery.isLoading}
