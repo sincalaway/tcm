@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { simulateFormulaCombination } from "../client/src/lib/formulaSimulation";
+import { buildDoseStudyRows } from "../client/src/lib/formulaDoseProfiles";
+import { expandPassageLearningTerms, passageCooccurrenceHints } from "../shared/passageLearningLexicon";
 import {
   matchPassageLearningRecords,
   parsePassageLearningTerms,
@@ -27,9 +29,21 @@ describe("formula simulation and passage learning matching", () => {
     expect(simulation.notice).toContain("不产生处方");
   });
 
+  it("converts only source-backed ancient formula quantities and preserves pieces as non-weight values", () => {
+    const doseStudy = buildDoseStudyRows({
+      formulaSlug: "gui-zhi-tang",
+      simulatedIngredients: ["桂枝", "芍药", "炙甘草", "生姜", "大枣", "附子"],
+      standardId: "han-13-75",
+    });
+    expect(doseStudy.profile?.formulaSlug).toBe("gui-zhi-tang");
+    expect(doseStudy.rows.find(row => row.herb === "桂枝")?.converted).toBe("≈ 41.25 g");
+    expect(doseStudy.rows.find(row => row.herb === "大枣")?.converted).toBe("按枚保留，不作质量换算");
+    expect(doseStudy.missingIngredients).toEqual(["附子"]);
+  });
+
   it("matches passage text as explainable study references rather than a constitution conclusion", () => {
     const records = [
-      { id: 1, chapterId: 1, chapterTitle: "辨太阳病脉证并治", passageNumber: 12, title: "太阳中风 · 汗出恶风", excerpt: "太阳中风，阳浮而阴弱，阳浮者热自发，阴弱者汗自出，啬啬恶寒。", keywords: "太阳中风、汗出、恶风", sourceReference: "《伤寒论》·太阳篇第12条", sourceUrl: "https://example.test/1" },
+      { id: 1, chapterId: 1, chapterTitle: "辨太阳病脉证并治", passageNumber: 12, title: "太阳中风 · 汗出恶风", excerpt: "太阳中风，发热，阳浮而阴弱，阴弱者汗自出，啬啬恶寒。", keywords: "太阳中风、汗出、恶风", sourceReference: "《伤寒论》·太阳篇第12条", sourceUrl: "https://example.test/1" },
       { id: 2, chapterId: 2, chapterTitle: "辨阳明病脉证并治", passageNumber: 11, title: "阳明中风 · 口苦咽干", excerpt: "阳明中风，口苦咽干，腹满微喘。", keywords: "阳明中风、口苦、腹满", sourceReference: "《伤寒论》·阳明篇第11条", sourceUrl: "https://example.test/2" },
     ];
 
@@ -38,5 +52,8 @@ describe("formula simulation and passage learning matching", () => {
     expect(matches).toHaveLength(1);
     expect(matches[0]).toMatchObject({ id: 1, matchedTerms: ["汗出", "恶风"] });
     expect(matchPassageLearningRecords(records, { perspective: "digestive", matchMode: "any" }).map(item => item.id)).toContain(2);
+    expect(matchPassageLearningRecords(records, { query: "发烧", matchMode: "any" })[0]?.matchedTerms).toContain("发烧（检索为发热）");
+    expect(expandPassageLearningTerms(["怕冷", "腹泻"])).toEqual([{ input: "怕冷", canonical: "恶寒" }, { input: "腹泻", canonical: "下利" }]);
+    expect(passageCooccurrenceHints.some(item => item.id === "surface-sweat")).toBe(true);
   });
 });

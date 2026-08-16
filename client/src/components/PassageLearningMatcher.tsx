@@ -2,13 +2,17 @@ import { BookMarked, Search, ShieldAlert } from "lucide-react";
 import { useState } from "react";
 import { Link } from "wouter";
 import { trpc } from "@/lib/trpc";
+import { passageCooccurrenceHints, passageSymptomLexicon } from "@shared/passageLearningLexicon";
 
 const perspectives = [
   { id: "all", label: "不预设角度", helper: "仅按输入词检索。" },
-  { id: "cold-heat", label: "寒热感受", helper: "扩展恶寒、发热、寒热等条文词。" },
-  { id: "sweat-fluid", label: "汗出与津液", helper: "扩展汗出、无汗、口渴、小便等条文词。" },
-  { id: "digestive", label: "饮食与腹部", helper: "扩展腹满、不能食、呕、下利等条文词。" },
-  { id: "sleep-emotion", label: "睡眠与情志", helper: "扩展烦、不得眠、惊悸等条文词。" },
+  { id: "cold-heat", label: "寒热感受", helper: "扩展恶寒、发热、潮热等条文词。" },
+  { id: "sweat-fluid", label: "汗出与津液", helper: "扩展汗出、无汗、口渴、小便不利等条文词。" },
+  { id: "digestive", label: "饮食与腹部", helper: "扩展腹满、不能食、呕、下利、大便硬等条文词。" },
+  { id: "sleep-emotion", label: "睡眠与情志", helper: "扩展心烦、不得眠、惊悸等条文词。" },
+  { id: "head-body", label: "头身与表证", helper: "扩展头痛、项强、身疼痛等条文词。" },
+  { id: "chest-breathing", label: "胸胁与呼吸", helper: "扩展胸胁满、喘、咳等条文词。" },
+  { id: "limbs", label: "四肢与寒热", helper: "扩展四逆、身重等条文词。" },
 ] as const;
 
 type Perspective = (typeof perspectives)[number]["id"];
@@ -36,6 +40,8 @@ export function PassageLearningMatcher() {
       </div>
       <div className="perspective-options" role="group" aria-label="体质自我观察角度">{perspectives.map(item => <button type="button" key={item.id} className={perspective === item.id ? "active" : ""} onClick={() => setPerspective(item.id)}><b>{item.label}</b><small>{item.helper}</small></button>)}</div>
       <p className="perspective-helper">当前角度：{activePerspective.helper} 这只是在文本检索中补充关键词，不等同于体质结论。</p>
+      <div className="passage-lexicon"><div><b>常见症状词快捷输入</b><p>口语词会映射为站内原典索引词；点击后仍可自行删改。</p></div><div>{passageSymptomLexicon.slice(0, 18).map(item => <button type="button" key={item.canonical} onClick={() => setQuery(current => current ? `${current}、${item.aliases[0] ?? item.canonical}` : item.aliases[0] ?? item.canonical)}><b>{item.aliases[0] ?? item.canonical}</b><small>→ {item.canonical}</small></button>)}</div></div>
+      <section className="passage-cooccurrence"><div><span>并见线索对读</span><h3>常见夹杂线索的原典鉴别提示</h3><p>以下提示仅帮助将并列词带回《伤寒论》原文逐项核对，不判定合病、并病、传经、体质或方证。</p></div><div>{passageCooccurrenceHints.map(hint => <details key={hint.id}><summary>{hint.title}<small>{hint.terms.join(" · ")}</small></summary><p>{hint.prompt}</p><button type="button" onClick={() => { setQuery(hint.terms.join("、")); setMatchMode("any"); }}>以此组词检索条文</button></details>)}</div></section>
       {query.trim() || perspective !== "all" ? <div className="passage-learning-results" aria-live="polite">{result.isFetching ? <p>正在对照《伤寒论》条文关键词……</p> : result.data?.length ? <><p>得到 {result.data.length} 条学习线索。排序依据为标题、章节、关键词和摘录中的文本命中，不代表临床相关性或适用性。</p>{result.data.slice(0, 8).map(item => <article key={item.id}><div><span>{item.matchedTerms.join(" · ")}</span><h3>{item.title}</h3><p>{item.excerpt}</p><small>{item.sourceReference}</small></div><div className="passage-learning-links"><Link href={`/guji?classic=shang-han-lun&chapter=${encodeURIComponent(item.chapterTitle)}&passage=${item.passageNumber}`}>在站内阅读</Link><a href={item.sourceUrl} target="_blank" rel="noreferrer">原典来源</a></div></article>)}</> : <p>当前条文目录没有匹配项。可减少输入词、改为“命中任一线索”，或切换观察角度。</p>}</div> : <p className="passage-learning-empty">输入至少一个条文线索，或选择一个自我观察角度后开始对读。</p>}
     </section>
   );

@@ -5,11 +5,14 @@ import {
   simulateFormulaCombination,
   type SimulationHerb,
 } from "@/lib/formulaSimulation";
+import { buildDoseStudyRows } from "@/lib/formulaDoseProfiles";
+import { weightStandards, type WeightStandard } from "@/lib/ancientMeasures";
 
 type FormulaOption = {
   id: number;
   name: string;
   sourceTitle: string;
+  slug: string;
   ingredients: string;
 };
 
@@ -17,10 +20,14 @@ export function FormulaCombinationSimulator({
   formulas,
   herbs,
   onSendToDecoction,
+  weightStandardId,
+  onWeightStandardChange,
 }: {
   formulas: FormulaOption[];
   herbs: SimulationHerb[];
   onSendToDecoction: (ingredients: string[]) => void;
+  weightStandardId: WeightStandard["id"];
+  onWeightStandardChange: (value: WeightStandard["id"]) => void;
 }) {
   const [formulaId, setFormulaId] = useState("");
   const [added, setAdded] = useState<string[]>([]);
@@ -45,6 +52,7 @@ export function FormulaCombinationSimulator({
       }),
     [added, baseIngredients, herbs, removed]
   );
+  const doseStudy = useMemo(() => activeFormula ? buildDoseStudyRows({ formulaSlug: activeFormula.slug, simulatedIngredients: simulation.simulatedIngredients, standardId: weightStandardId }) : undefined, [activeFormula, simulation.simulatedIngredients, weightStandardId]);
   const candidates = useMemo(() => {
     const keyword = herbQuery.trim();
     return herbs
@@ -80,6 +88,7 @@ export function FormulaCombinationSimulator({
       <p className="formula-simulator-notice">{simulation.notice}</p>
       <div className="formula-simulator-controls">
         <label><span>基底方剂</span><select value={formulaId} onChange={event => { setFormulaId(event.target.value); resetMods(); }}><option value="">请选择一首目录方剂</option>{formulas.map(formula => <option key={formula.id} value={formula.id}>{formula.name} · {formula.sourceTitle}</option>)}</select></label>
+        <label><span>衡重口径</span><select value={weightStandardId} onChange={event => onWeightStandardChange(event.target.value as WeightStandard["id"])}>{weightStandards.map(standard => <option value={standard.id} key={standard.id}>{standard.label}</option>)}</select></label>
         {activeFormula ? <p><b>{activeFormula.name}</b><span>{activeFormula.sourceTitle}</span></p> : <p>选择基底方剂后，方中药味会出现在下方，可逐味标记为“暂不纳入”。</p>}
       </div>
 
@@ -93,6 +102,7 @@ export function FormulaCombinationSimulator({
           <div className="simulation-result-head"><div><span>模拟组合</span><h3>{simulation.simulatedIngredients.length ? simulation.simulatedIngredients.join(" · ") : "当前组合未保留药味"}</h3></div><button type="button" onClick={() => onSendToDecoction(simulation.simulatedIngredients)} disabled={!simulation.simulatedIngredients.length}><Send size={14} />带入煎煮研读提示</button></div>
           <div className="simulation-change-summary"><p><b>加入</b>{simulation.added.length ? simulation.added.join("、") : "无"}</p><p><b>暂不纳入</b>{simulation.removed.length ? simulation.removed.join("、") : "无"}</p><p><b>特殊煎煮候选</b>{simulation.decoctionCandidates.predecoctionCandidates.length || simulation.decoctionCandidates.lateAdditionCandidates.length ? `${simulation.decoctionCandidates.predecoctionCandidates.length ? `核对先煎：${simulation.decoctionCandidates.predecoctionCandidates.join("、")}` : ""}${simulation.decoctionCandidates.predecoctionCandidates.length && simulation.decoctionCandidates.lateAdditionCandidates.length ? "；" : ""}${simulation.decoctionCandidates.lateAdditionCandidates.length ? `核对后下：${simulation.decoctionCandidates.lateAdditionCandidates.join("、")}` : ""}` : "未识别到候选项；仍需核对处方或药房标注"}</p></div>
           <div className="simulation-profile-grid"><ProfileCard label="原方药味" profile={simulation.baseProfile} /><ProfileCard label="模拟组合" profile={simulation.simulatedProfile} /></div>
+          {doseStudy ? <DoseStudyCard doseStudy={doseStudy} standardId={weightStandardId} /> : null}
         </section>
       </> : null}
     </section>
@@ -101,4 +111,10 @@ export function FormulaCombinationSimulator({
 
 function ProfileCard({ label, profile }: { label: string; profile: ReturnType<typeof simulateFormulaCombination>["baseProfile"] }) {
   return <article><h4>{label}</h4><p><b>{profile.total}</b> 味药材 <small>（其中 {profile.indexed} 味已在本草索引中匹配）</small></p><dl><div><dt>类别</dt><dd>{formatProfileValues(profile.categories)}</dd></div><div><dt>药性</dt><dd>{formatProfileValues(profile.natures)}</dd></div><div><dt>五味</dt><dd>{formatProfileValues(profile.tastes)}</dd></div><div><dt>归经</dt><dd>{formatProfileValues(profile.meridians)}</dd></div></dl></article>;
+}
+
+function DoseStudyCard({ doseStudy, standardId }: { doseStudy: ReturnType<typeof buildDoseStudyRows>; standardId: WeightStandard["id"] }) {
+  const standard = weightStandards.find(item => item.id === standardId) ?? weightStandards[0];
+  if (!doseStudy.profile) return <section className="simulation-dose-card"><h4>古制数量与衡重对照</h4><p>该目录方剂尚未建立可回到公开页面核对的原典数量档案；新增药味不会自动推定数量。</p></section>;
+  return <section className="simulation-dose-card"><div><span>古制数量对照</span><h4>药味剂量与衡重联动</h4><p>{doseStudy.profile.transcriptionNote}</p></div><p className="simulation-dose-boundary">当前口径：{standard.label}。质量、容量与枚数分别呈现，不能合并为总剂量；模拟加入药味不自动赋予数量。</p><div className="simulation-dose-list">{doseStudy.rows.map(item => <article key={item.herb}><b>{item.herb}</b><span>{item.ancient}</span><strong>{item.converted}</strong></article>)}</div>{doseStudy.missingIngredients.length ? <p className="simulation-dose-missing">未纳入原典数量档案：{doseStudy.missingIngredients.join("、")}。这些药味只参与本草索引对比，不产生数量。</p> : null}<a href={doseStudy.profile.sourceUrl} target="_blank" rel="noreferrer">返回{doseStudy.profile.sourceLabel}核对</a></section>;
 }
