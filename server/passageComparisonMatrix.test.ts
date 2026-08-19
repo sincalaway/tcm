@@ -31,12 +31,16 @@ describe("passage comparison matrix", () => {
 
   it("keeps selected records as separate columns and exposes only textual comparison evidence", () => {
     const matrix = buildPassageComparisonMatrix(records);
-    expect(matrix).toHaveLength(6);
+    expect(matrix).toHaveLength(9);
     expect(matrix[0].cells.map(item => item.passageId)).toEqual([11, 22]);
     expect(matrix[0].cells[0].cell.primary).toBe("合病");
     expect(matrix[0].cells[1].cell.primary).toBe("未见明确标签");
     expect(matrix.find(row => row.id === "formulas")?.cells[0].cell.primary).toBe("葛根汤");
     expect(matrix.find(row => row.id === "formulas")?.cells[1].cell.primary).toBe("未收录关联方剂");
+    const cheng = matrix.find(row => row.id === "commentary-cheng");
+    expect(cheng?.cells[0].cell.details[0]).toContain("合病／并病文字");
+    expect(cheng?.cells[0].cell.links?.[0].url).toContain("wikisource.org");
+    expect(matrix.find(row => row.id === "commentary-ke")?.cells[0].cell.primary).toBe("研读提要");
   });
 
   it("surfaces co-occurrence prompts only when at least two source terms appear in one text", () => {

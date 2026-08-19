@@ -1,4 +1,5 @@
 import { passageCooccurrenceHints, passageSymptomLexicon } from "./passageLearningLexicon";
+import { commentaryPerspectives, commentaryPromptForText } from "./passageCommentaryIndex";
 
 export type PassageMatrixFormula = {
   id: number;
@@ -30,10 +31,11 @@ export type PassageMatrixRecord = {
 export type PassageMatrixCell = {
   primary: string;
   details: string[];
+  links?: Array<{ label: string; url: string }>;
 };
 
 export type PassageMatrixRow = {
-  id: "explicit" | "symptoms" | "cooccurrence" | "formulas" | "versions" | "source";
+  id: "explicit" | "symptoms" | "cooccurrence" | "commentary-cheng" | "commentary-fang" | "commentary-ke" | "formulas" | "versions" | "source";
   label: string;
   description: string;
   cells: Array<{ passageId: number; cell: PassageMatrixCell }>;
@@ -98,6 +100,19 @@ export function buildPassageComparisonMatrix(records: PassageMatrixRecord[]) {
         return { passageId: record.id, cell: hints.length ? { primary: hints.map(item => item.hint.title).join("；"), details: hints.map(item => item.terms.join("、")) } : { primary: "无两项以上同组命中", details: ["不等于排除其他文本关联"] } };
       }),
     },
+    ...commentaryPerspectives.map(perspective => ({
+      id: perspective.commentator === "成无己" ? "commentary-cheng" as const : perspective.commentator === "方有执" ? "commentary-fang" as const : "commentary-ke" as const,
+      label: `${perspective.commentator} · ${perspective.label}`,
+      description: `${perspective.methodSummary} ${perspective.source.sourceNote}`,
+      cells: records.map(record => ({
+        passageId: record.id,
+        cell: {
+          primary: "研读提要",
+          details: [commentaryPromptForText(textOf(record), perspective.commentator)],
+          links: [{ label: `回查${perspective.commentator}${perspective.source.work}`, url: perspective.source.sourceUrl }],
+        },
+      })),
+    })),
     { id: "formulas", label: "站内关联方剂", description: "显示当前目录维护的条文—方剂映射及其研读备注，非方证推荐。", cells: records.map(record => ({ passageId: record.id, cell: formulaCell(record) })) },
     { id: "versions", label: "版本参照", description: "显示已维护的版本参照标签；文本校勘仍应回到外部来源。", cells: records.map(record => ({ passageId: record.id, cell: versionCell(record) })) },
     { id: "source", label: "条文出处", description: "每列保留原有出处名称与链接，便于核对。", cells: records.map(record => ({ passageId: record.id, cell: { primary: record.sourceReference, details: [record.sourceUrl] } })) },
