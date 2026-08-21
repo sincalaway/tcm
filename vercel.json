@@ -3,10 +3,13 @@
   "buildCommand": "pnpm vercel:build",
   "installCommand": "corepack enable && pnpm install --frozen-lockfile",
   "outputDirectory": "dist/public",
-  "rewrites": [
+  "routes": [
     {
-      "source": "/(.*)",
-      "destination": "/index.html"
+      "handle": "filesystem"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
     }
   ]
 }

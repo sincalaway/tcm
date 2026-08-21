@@ -43,3 +43,5 @@ Preview 的 React 深链接回退已生效：直接访问 `/bencao?q=桂枝` 会
 将 API 分派置于 SPA 回退之前后，最新 Preview 的静态资源被通配路由同时拦截，导致前端空白。已在 API 规则与 SPA 回退之间恢复 Vercel 的 filesystem 路由阶段：API 先进入 Express，静态入口和资源文件按文件系统提供，只有其余前端路径才回退至 `index.html`。
 
 最新只读健康检查显示 `coreCatalog`、`passageGraph` 与 `studyTools` 已就绪，而 `knowledgeBase`、`editionComparison` 尚缺。这说明首次 Drizzle 迁移已提交前 3 批的迁移记录并在第 4 批中止；将重新启用 `drizzle-kit migrate`，使其按迁移日志跳过已完成批次，仅继续第 4、5 批。公开目录种子将在全部阶段就绪后再执行。
+
+后续验证表明通配 `rewrites` 仍会将 `/api/*` 改写为 `index.html`，因此不能保留 Express 的原始 tRPC 路径。路由将调整为只使用 Vercel 的 filesystem 阶段（自动匹配 `api/[...path].js` 函数与静态资源）后再回退至 React 入口；不再对 API 请求执行自定义 destination 重写。
