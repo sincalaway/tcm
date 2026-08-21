@@ -312,7 +312,7 @@ export const knowledgeDocuments = mysqlTable("knowledge_documents", {
   title: varchar("title", { length: 255 }).notNull(),
   mimeType: varchar("mimeType", { length: 128 }).notNull(),
   sizeBytes: int("sizeBytes").notNull(),
-  storageKey: varchar("storageKey", { length: 1024 }).notNull().unique(),
+  storageKey: varchar("storageKey", { length: 768 }).notNull().unique(),
   storageUrl: varchar("storageUrl", { length: 1024 }).notNull(),
   textPreview: text("textPreview"),
   textContent: mediumtext("textContent"),

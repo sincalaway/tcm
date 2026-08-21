@@ -16,7 +16,7 @@ CREATE TABLE `knowledge_documents` (
 	`title` varchar(255) NOT NULL,
 	`mimeType` varchar(128) NOT NULL,
 	`sizeBytes` int NOT NULL,
-	`storageKey` varchar(1024) NOT NULL,
+	`storageKey` varchar(768) NOT NULL,
 	`storageUrl` varchar(1024) NOT NULL,
 	`textPreview` text,
 	`createdAt` timestamp NOT NULL DEFAULT (now()),
