@@ -1,5 +1,7 @@
 import express from "express";
+import { sql } from "drizzle-orm";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
+import { getDb } from "../db";
 import { appRouter } from "../routers";
 import { handleReviewReminderSchedule } from "../scheduled/reviewReminders";
 import { createContext } from "./context";
@@ -17,11 +19,30 @@ export function createApp() {
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
-  app.get("/api/health", (_req, res) => {
+  app.get("/api/health", async (_req, res) => {
+    const databaseConfigured = Boolean(process.env.DATABASE_URL);
+    let databaseReachable: boolean | null = null;
+
+    if (databaseConfigured) {
+      try {
+        const db = await getDb();
+        if (db) {
+          await db.execute(sql`SELECT 1`);
+          databaseReachable = true;
+        } else {
+          databaseReachable = false;
+        }
+      } catch (error) {
+        console.warn("[Health] Database connectivity check failed", error);
+        databaseReachable = false;
+      }
+    }
+
     res.status(200).json({
       ok: true,
       runtime: process.env.VERCEL ? "vercel" : "node",
-      databaseConfigured: Boolean(process.env.DATABASE_URL),
+      databaseConfigured,
+      databaseReachable,
       oauthConfigured: Boolean(process.env.OAUTH_SERVER_URL && process.env.VITE_APP_ID),
       storageConfigured: Boolean(process.env.BUILT_IN_FORGE_API_URL && process.env.BUILT_IN_FORGE_API_KEY),
     });
