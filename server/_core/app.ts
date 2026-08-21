@@ -32,8 +32,10 @@ export function createApp() {
         } else {
           databaseReachable = false;
         }
-      } catch (error) {
-        console.warn("[Health] Database connectivity check failed", error);
+      } catch {
+        // Do not log the driver error: connection errors may embed database
+        // account names, hostnames, or other deployment-sensitive details.
+        console.warn("[Health] Database connectivity check failed");
         databaseReachable = false;
       }
     }
