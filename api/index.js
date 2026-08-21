@@ -1,214 +1,11 @@
 // server/_core/app.ts
 import express from "express";
+import { sql as sql2 } from "drizzle-orm";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
-
-// shared/const.ts
-var COOKIE_NAME = "app_session_id";
-var ONE_YEAR_MS = 1e3 * 60 * 60 * 24 * 365;
-var AXIOS_TIMEOUT_MS = 3e4;
-var UNAUTHED_ERR_MSG = "Please login (10001)";
-var NOT_ADMIN_ERR_MSG = "You do not have required permission (10002)";
-var OAUTH_STATE_COOKIE = "__Host-oauth_state";
-var decodeOAuthState = (state) => {
-  let decoded;
-  try {
-    decoded = atob(state);
-  } catch {
-    return { redirectUri: "" };
-  }
-  try {
-    const parsed = JSON.parse(decoded);
-    if (parsed && typeof parsed.redirectUri === "string") return parsed;
-  } catch {
-  }
-  return { redirectUri: decoded };
-};
-
-// server/_core/cookies.ts
-function isSecureRequest(req) {
-  if (req.protocol === "https") return true;
-  const forwardedProto = req.headers["x-forwarded-proto"];
-  if (!forwardedProto) return false;
-  const protoList = Array.isArray(forwardedProto) ? forwardedProto : forwardedProto.split(",");
-  return protoList.some((proto) => proto.trim().toLowerCase() === "https");
-}
-function getSessionCookieOptions(req) {
-  return {
-    httpOnly: true,
-    path: "/",
-    sameSite: "none",
-    secure: isSecureRequest(req)
-  };
-}
-
-// server/_core/systemRouter.ts
-import { z } from "zod";
-
-// server/_core/notification.ts
-import { TRPCError } from "@trpc/server";
-
-// server/_core/env.ts
-var ENV = {
-  appId: process.env.VITE_APP_ID ?? "",
-  cookieSecret: process.env.JWT_SECRET ?? "",
-  databaseUrl: process.env.DATABASE_URL ?? "",
-  oAuthServerUrl: process.env.OAUTH_SERVER_URL ?? "",
-  ownerOpenId: process.env.OWNER_OPEN_ID ?? "",
-  isProduction: process.env.NODE_ENV === "production",
-  forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
-  forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
-  localLlmBaseUrl: process.env.LOCAL_LLM_BASE_URL ?? "",
-  localLlmModel: process.env.LOCAL_LLM_MODEL ?? "",
-  localLlmApiKey: process.env.LOCAL_LLM_API_KEY ?? "",
-  networkLlmBaseUrl: process.env.NETWORK_LLM_BASE_URL ?? "",
-  networkLlmModel: process.env.NETWORK_LLM_MODEL ?? "",
-  networkLlmApiKey: process.env.NETWORK_LLM_API_KEY ?? ""
-};
-
-// server/_core/notification.ts
-var TITLE_MAX_LENGTH = 1200;
-var CONTENT_MAX_LENGTH = 2e4;
-var trimValue = (value) => value.trim();
-var isNonEmptyString = (value) => typeof value === "string" && value.trim().length > 0;
-var buildEndpointUrl = (baseUrl) => {
-  const normalizedBase = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
-  return new URL(
-    "webdevtoken.v1.WebDevService/SendNotification",
-    normalizedBase
-  ).toString();
-};
-var validatePayload = (input) => {
-  if (!isNonEmptyString(input.title)) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Notification title is required."
-    });
-  }
-  if (!isNonEmptyString(input.content)) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Notification content is required."
-    });
-  }
-  const title = trimValue(input.title);
-  const content = trimValue(input.content);
-  if (title.length > TITLE_MAX_LENGTH) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: `Notification title must be at most ${TITLE_MAX_LENGTH} characters.`
-    });
-  }
-  if (content.length > CONTENT_MAX_LENGTH) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: `Notification content must be at most ${CONTENT_MAX_LENGTH} characters.`
-    });
-  }
-  return { title, content };
-};
-async function notifyOwner(payload) {
-  const { title, content } = validatePayload(payload);
-  if (!ENV.forgeApiUrl) {
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Notification service URL is not configured."
-    });
-  }
-  if (!ENV.forgeApiKey) {
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Notification service API key is not configured."
-    });
-  }
-  const endpoint = buildEndpointUrl(ENV.forgeApiUrl);
-  try {
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        accept: "application/json",
-        authorization: `Bearer ${ENV.forgeApiKey}`,
-        "content-type": "application/json",
-        "connect-protocol-version": "1"
-      },
-      body: JSON.stringify({ title, content })
-    });
-    if (!response.ok) {
-      const detail = await response.text().catch(() => "");
-      console.warn(
-        `[Notification] Failed to notify owner (${response.status} ${response.statusText})${detail ? `: ${detail}` : ""}`
-      );
-      return false;
-    }
-    return true;
-  } catch (error) {
-    console.warn("[Notification] Error calling notification service:", error);
-    return false;
-  }
-}
-
-// server/_core/trpc.ts
-import { initTRPC, TRPCError as TRPCError2 } from "@trpc/server";
-import superjson from "superjson";
-var t = initTRPC.context().create({
-  transformer: superjson
-});
-var router = t.router;
-var publicProcedure = t.procedure;
-var requireUser = t.middleware(async (opts) => {
-  const { ctx, next } = opts;
-  if (!ctx.user) {
-    throw new TRPCError2({ code: "UNAUTHORIZED", message: UNAUTHED_ERR_MSG });
-  }
-  return next({
-    ctx: {
-      ...ctx,
-      user: ctx.user
-    }
-  });
-});
-var protectedProcedure = t.procedure.use(requireUser);
-var adminProcedure = t.procedure.use(
-  t.middleware(async (opts) => {
-    const { ctx, next } = opts;
-    if (!ctx.user || ctx.user.role !== "admin") {
-      throw new TRPCError2({ code: "FORBIDDEN", message: NOT_ADMIN_ERR_MSG });
-    }
-    return next({
-      ctx: {
-        ...ctx,
-        user: ctx.user
-      }
-    });
-  })
-);
-
-// server/_core/systemRouter.ts
-var systemRouter = router({
-  health: publicProcedure.input(
-    z.object({
-      timestamp: z.number().min(0, "timestamp cannot be negative")
-    })
-  ).query(() => ({
-    ok: true
-  })),
-  notifyOwner: adminProcedure.input(
-    z.object({
-      title: z.string().min(1, "title is required"),
-      content: z.string().min(1, "content is required")
-    })
-  ).mutation(async ({ input }) => {
-    const delivered = await notifyOwner(input);
-    return {
-      success: delivered
-    };
-  })
-});
-
-// server/routers/catalog.ts
-import { z as z2 } from "zod";
 
 // server/db.ts
 import { and, desc, eq, inArray, isNull, like, or } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 
 // drizzle/schema.ts
@@ -3196,6 +2993,24 @@ var formulaPassageSeed = [
   ["xiao-cheng-qi-tang", "\u8FA8\u53A5\u9634\u75C5\u8109\u8BC1\u5E76\u6CBB", 6, "related", "\u4FDD\u7559\u53A5\u9634\u7BC7\u4E0B\u5229\u8C35\u8BED\u7684\u8DE8\u7BC7\u5BF9\u8BFB\u5165\u53E3\u3002"]
 ];
 
+// server/_core/env.ts
+var ENV = {
+  appId: process.env.VITE_APP_ID ?? "",
+  cookieSecret: process.env.JWT_SECRET ?? "",
+  databaseUrl: process.env.DATABASE_URL ?? "",
+  oAuthServerUrl: process.env.OAUTH_SERVER_URL ?? "",
+  ownerOpenId: process.env.OWNER_OPEN_ID ?? "",
+  isProduction: process.env.NODE_ENV === "production",
+  forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
+  forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
+  localLlmBaseUrl: process.env.LOCAL_LLM_BASE_URL ?? "",
+  localLlmModel: process.env.LOCAL_LLM_MODEL ?? "",
+  localLlmApiKey: process.env.LOCAL_LLM_API_KEY ?? "",
+  networkLlmBaseUrl: process.env.NETWORK_LLM_BASE_URL ?? "",
+  networkLlmModel: process.env.NETWORK_LLM_MODEL ?? "",
+  networkLlmApiKey: process.env.NETWORK_LLM_API_KEY ?? ""
+};
+
 // server/storage.ts
 function getForgeConfig() {
   const forgeUrl = ENV.forgeApiUrl;
@@ -3314,10 +3129,68 @@ var _db = null;
 var seedPromise = null;
 var catalogFiltersCache = null;
 var wikisourceSearchCache = /* @__PURE__ */ new Map();
+var CATALOG_SCHEMA_RECOVERY_STATEMENTS = [
+  `CREATE TABLE IF NOT EXISTS \`ai_study_summaries\` (
+    \`id\` int AUTO_INCREMENT NOT NULL,
+    \`conversationId\` int NOT NULL,
+    \`userId\` int NOT NULL,
+    \`content\` text NOT NULL,
+    \`sourceMessageCount\` int NOT NULL,
+    \`createdAt\` timestamp NOT NULL DEFAULT (now()),
+    \`updatedAt\` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT \`ai_study_summaries_id\` PRIMARY KEY(\`id\`),
+    CONSTRAINT \`ai_study_summary_conversation_unique\` UNIQUE(\`conversationId\`)
+  )`,
+  `CREATE TABLE IF NOT EXISTS \`knowledge_documents\` (
+    \`id\` int AUTO_INCREMENT NOT NULL,
+    \`userId\` int NOT NULL,
+    \`title\` varchar(255) NOT NULL,
+    \`mimeType\` varchar(128) NOT NULL,
+    \`sizeBytes\` int NOT NULL,
+    \`storageKey\` varchar(1024) NOT NULL,
+    \`storageUrl\` varchar(1024) NOT NULL,
+    \`textPreview\` text,
+    \`createdAt\` timestamp NOT NULL DEFAULT (now()),
+    \`updatedAt\` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT \`knowledge_documents_id\` PRIMARY KEY(\`id\`),
+    CONSTRAINT \`knowledge_documents_storageKey_unique\` UNIQUE(\`storageKey\`)
+  )`,
+  "ALTER TABLE `knowledge_documents` ADD COLUMN IF NOT EXISTS `textContent` mediumtext",
+  "CREATE INDEX IF NOT EXISTS `ai_study_summaries_user_idx` ON `ai_study_summaries` (`userId`, `updatedAt`)",
+  "CREATE INDEX IF NOT EXISTS `knowledge_documents_user_idx` ON `knowledge_documents` (`userId`, `updatedAt`)",
+  "CREATE INDEX IF NOT EXISTS `knowledge_documents_title_idx` ON `knowledge_documents` (`userId`, `title`)",
+  `CREATE TABLE IF NOT EXISTS \`classic_passage_versions\` (
+    \`id\` int AUTO_INCREMENT NOT NULL,
+    \`passageId\` int NOT NULL,
+    \`editionLabel\` varchar(255) NOT NULL,
+    \`text\` text NOT NULL,
+    \`variantNote\` text,
+    \`verificationStatus\` enum('verified','pending','reference_only') NOT NULL DEFAULT 'pending',
+    \`sourceReference\` varchar(255) NOT NULL,
+    \`sourceUrl\` varchar(1024) NOT NULL,
+    \`createdAt\` timestamp NOT NULL DEFAULT (now()),
+    \`updatedAt\` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT \`classic_passage_versions_id\` PRIMARY KEY(\`id\`),
+    CONSTRAINT \`classic_passage_version_unique\` UNIQUE(\`passageId\`, \`editionLabel\`)
+  )`,
+  "CREATE INDEX IF NOT EXISTS `classic_passage_versions_passage_idx` ON `classic_passage_versions` (`passageId`)",
+  "CREATE INDEX IF NOT EXISTS `classic_passage_versions_status_idx` ON `classic_passage_versions` (`verificationStatus`)"
+];
 async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
-      _db = drizzle(process.env.DATABASE_URL);
+      const connectionString = process.env.DATABASE_URL;
+      const hostname = new URL(connectionString).hostname;
+      if (hostname.endsWith(".tidbcloud.com")) {
+        _db = drizzle({
+          connection: {
+            uri: connectionString,
+            ssl: { rejectUnauthorized: true }
+          }
+        });
+      } else {
+        _db = drizzle(connectionString);
+      }
     } catch (error) {
       console.warn("[Database] Failed to connect:", error);
       _db = null;
@@ -3359,6 +3232,9 @@ async function ensureCatalogSeed() {
 async function seedCatalog() {
   const db = await getDb();
   if (!db) return;
+  for (const statement of CATALOG_SCHEMA_RECOVERY_STATEMENTS) {
+    await db.execute(sql.raw(statement));
+  }
   await db.insert(contentSources).values(sourceSeed).onDuplicateKeyUpdate({ set: { updatedAt: /* @__PURE__ */ new Date() } });
   const allSources = await db.select().from(contentSources);
   const sourceIds = new Map(allSources.map((source) => [source.slug, source.id]));
@@ -4019,6 +3895,191 @@ async function getStudyResource(db, resourceType, resourceId) {
   const row2 = await db.select({ title: classicChapters.title, subtitle: classics.title }).from(classicChapters).leftJoin(classics, eq(classicChapters.classicId, classics.id)).where(eq(classicChapters.id, resourceId)).limit(1);
   return row2[0] ? { ...row2[0], kind: "\u7AE0\u8282", href: "/guji" } : null;
 }
+
+// shared/const.ts
+var COOKIE_NAME = "app_session_id";
+var ONE_YEAR_MS = 1e3 * 60 * 60 * 24 * 365;
+var AXIOS_TIMEOUT_MS = 3e4;
+var UNAUTHED_ERR_MSG = "Please login (10001)";
+var NOT_ADMIN_ERR_MSG = "You do not have required permission (10002)";
+var OAUTH_STATE_COOKIE = "__Host-oauth_state";
+var decodeOAuthState = (state) => {
+  let decoded;
+  try {
+    decoded = atob(state);
+  } catch {
+    return { redirectUri: "" };
+  }
+  try {
+    const parsed = JSON.parse(decoded);
+    if (parsed && typeof parsed.redirectUri === "string") return parsed;
+  } catch {
+  }
+  return { redirectUri: decoded };
+};
+
+// server/_core/cookies.ts
+function isSecureRequest(req) {
+  if (req.protocol === "https") return true;
+  const forwardedProto = req.headers["x-forwarded-proto"];
+  if (!forwardedProto) return false;
+  const protoList = Array.isArray(forwardedProto) ? forwardedProto : forwardedProto.split(",");
+  return protoList.some((proto) => proto.trim().toLowerCase() === "https");
+}
+function getSessionCookieOptions(req) {
+  return {
+    httpOnly: true,
+    path: "/",
+    sameSite: "none",
+    secure: isSecureRequest(req)
+  };
+}
+
+// server/_core/systemRouter.ts
+import { z } from "zod";
+
+// server/_core/notification.ts
+import { TRPCError } from "@trpc/server";
+var TITLE_MAX_LENGTH = 1200;
+var CONTENT_MAX_LENGTH = 2e4;
+var trimValue = (value) => value.trim();
+var isNonEmptyString = (value) => typeof value === "string" && value.trim().length > 0;
+var buildEndpointUrl = (baseUrl) => {
+  const normalizedBase = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
+  return new URL(
+    "webdevtoken.v1.WebDevService/SendNotification",
+    normalizedBase
+  ).toString();
+};
+var validatePayload = (input) => {
+  if (!isNonEmptyString(input.title)) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Notification title is required."
+    });
+  }
+  if (!isNonEmptyString(input.content)) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Notification content is required."
+    });
+  }
+  const title = trimValue(input.title);
+  const content = trimValue(input.content);
+  if (title.length > TITLE_MAX_LENGTH) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `Notification title must be at most ${TITLE_MAX_LENGTH} characters.`
+    });
+  }
+  if (content.length > CONTENT_MAX_LENGTH) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `Notification content must be at most ${CONTENT_MAX_LENGTH} characters.`
+    });
+  }
+  return { title, content };
+};
+async function notifyOwner(payload) {
+  const { title, content } = validatePayload(payload);
+  if (!ENV.forgeApiUrl) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Notification service URL is not configured."
+    });
+  }
+  if (!ENV.forgeApiKey) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Notification service API key is not configured."
+    });
+  }
+  const endpoint = buildEndpointUrl(ENV.forgeApiUrl);
+  try {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        accept: "application/json",
+        authorization: `Bearer ${ENV.forgeApiKey}`,
+        "content-type": "application/json",
+        "connect-protocol-version": "1"
+      },
+      body: JSON.stringify({ title, content })
+    });
+    if (!response.ok) {
+      const detail = await response.text().catch(() => "");
+      console.warn(
+        `[Notification] Failed to notify owner (${response.status} ${response.statusText})${detail ? `: ${detail}` : ""}`
+      );
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.warn("[Notification] Error calling notification service:", error);
+    return false;
+  }
+}
+
+// server/_core/trpc.ts
+import { initTRPC, TRPCError as TRPCError2 } from "@trpc/server";
+import superjson from "superjson";
+var t = initTRPC.context().create({
+  transformer: superjson
+});
+var router = t.router;
+var publicProcedure = t.procedure;
+var requireUser = t.middleware(async (opts) => {
+  const { ctx, next } = opts;
+  if (!ctx.user) {
+    throw new TRPCError2({ code: "UNAUTHORIZED", message: UNAUTHED_ERR_MSG });
+  }
+  return next({
+    ctx: {
+      ...ctx,
+      user: ctx.user
+    }
+  });
+});
+var protectedProcedure = t.procedure.use(requireUser);
+var adminProcedure = t.procedure.use(
+  t.middleware(async (opts) => {
+    const { ctx, next } = opts;
+    if (!ctx.user || ctx.user.role !== "admin") {
+      throw new TRPCError2({ code: "FORBIDDEN", message: NOT_ADMIN_ERR_MSG });
+    }
+    return next({
+      ctx: {
+        ...ctx,
+        user: ctx.user
+      }
+    });
+  })
+);
+
+// server/_core/systemRouter.ts
+var systemRouter = router({
+  health: publicProcedure.input(
+    z.object({
+      timestamp: z.number().min(0, "timestamp cannot be negative")
+    })
+  ).query(() => ({
+    ok: true
+  })),
+  notifyOwner: adminProcedure.input(
+    z.object({
+      title: z.string().min(1, "title is required"),
+      content: z.string().min(1, "content is required")
+    })
+  ).mutation(async ({ input }) => {
+    const delivered = await notifyOwner(input);
+    return {
+      success: delivered
+    };
+  })
+});
+
+// server/routers/catalog.ts
+import { z as z2 } from "zod";
 
 // shared/passageLearningLexicon.ts
 var passageSymptomLexicon = [
@@ -5093,11 +5154,58 @@ function createApp() {
   const app = express();
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
-  app.get("/api/health", (_req, res) => {
+  app.get("/api/health", async (_req, res) => {
+    const databaseConfigured = Boolean(process.env.DATABASE_URL);
+    let databaseReachable = null;
+    let schemaInitialized = null;
+    let schemaTableCount = null;
+    let schemaMilestones = null;
+    if (databaseConfigured) {
+      try {
+        const db = await getDb();
+        if (db) {
+          await db.execute(sql2`SELECT 1`);
+          databaseReachable = true;
+          const result = await db.execute(
+            sql2`SELECT COUNT(*) AS tableCount FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name IN ('users', 'herbs', 'knowledge_documents', 'classic_passage_versions')`
+          );
+          const firstResult = Array.isArray(result) ? result[0] : void 0;
+          const row2 = Array.isArray(firstResult) ? firstResult[0] : firstResult;
+          schemaTableCount = Number(row2?.tableCount ?? 0);
+          schemaInitialized = schemaTableCount === 4;
+          const milestoneResult = await db.execute(
+            sql2`SELECT table_name AS tableName FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name IN ('content_sources', 'herbs', 'formulas', 'classics', 'classic_chapters', 'classic_passages', 'formula_passage_mappings', 'learning_path_progress', 'learning_goals', 'review_reminders', 'knowledge_documents', 'ai_study_conversations', 'ai_study_messages', 'ai_study_summaries', 'classic_passage_versions')`
+          );
+          const milestoneRows = Array.isArray(milestoneResult) ? milestoneResult[0] : [];
+          const availableTables = new Set(
+            (Array.isArray(milestoneRows) ? milestoneRows : []).map(
+              (candidate) => String(candidate.tableName)
+            )
+          );
+          const hasAll = (tableNames) => tableNames.every((tableName) => availableTables.has(tableName));
+          schemaMilestones = {
+            coreCatalog: hasAll(["content_sources", "herbs", "formulas", "classics", "classic_chapters"]),
+            passageGraph: hasAll(["classic_passages", "formula_passage_mappings"]),
+            studyTools: hasAll(["learning_path_progress", "learning_goals", "review_reminders"]),
+            knowledgeBase: hasAll(["knowledge_documents", "ai_study_conversations", "ai_study_messages", "ai_study_summaries"]),
+            editionComparison: hasAll(["classic_passage_versions"])
+          };
+        } else {
+          databaseReachable = false;
+        }
+      } catch {
+        console.warn("[Health] Database connectivity check failed");
+        databaseReachable = false;
+      }
+    }
     res.status(200).json({
       ok: true,
       runtime: process.env.VERCEL ? "vercel" : "node",
-      databaseConfigured: Boolean(process.env.DATABASE_URL),
+      databaseConfigured,
+      databaseReachable,
+      schemaInitialized,
+      schemaTableCount,
+      schemaMilestones,
       oauthConfigured: Boolean(process.env.OAUTH_SERVER_URL && process.env.VITE_APP_ID),
       storageConfigured: Boolean(process.env.BUILT_IN_FORGE_API_URL && process.env.BUILT_IN_FORGE_API_KEY)
     });

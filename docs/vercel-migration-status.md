@@ -45,3 +45,5 @@ Preview 的 React 深链接回退已生效：直接访问 `/bencao?q=桂枝` 会
 最新只读健康检查显示 `coreCatalog`、`passageGraph` 与 `studyTools` 已就绪，而 `knowledgeBase`、`editionComparison` 尚缺。这说明首次 Drizzle 迁移已提交前 3 批的迁移记录并在第 4 批中止；将重新启用 `drizzle-kit migrate`，使其按迁移日志跳过已完成批次，仅继续第 4、5 批。公开目录种子将在全部阶段就绪后再执行。
 
 后续验证表明通配 `rewrites` 仍会将 `/api/*` 改写为 `index.html`，因此不能保留 Express 的原始 tRPC 路径。路由将调整为只使用 Vercel 的 filesystem 阶段（自动匹配 `api/[...path].js` 函数与静态资源）后再回退至 React 入口；不再对 API 请求执行自定义 destination 重写。
+
+Vercel 官方 Express 指南推荐以 `api/index` 作为单一函数入口，并把请求重写至 `/api`。迁移实现将采用该模式：先用一个 `/api/:path*` rewrite 命中函数，再对非 API 的前端路径回退至 `index.html`。这避免使用动态函数文件名与自定义 routes 组合时出现的 API 路径丢失问题。[Vercel Express 指南](https://vercel.com/kb/guide/using-express-with-vercel)
