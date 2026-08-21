@@ -108,6 +108,6 @@
 - [ ] 将验证通过的迁移提交推送到 `feat/vercel-fullstack-runtime`，不合并或覆盖 `main`。
 - [ ] 修复 Preview 环境中部分执行的 TiDB schema：先确认两张已创建表均为空，再以幂等 SQL 补齐其余迁移表与 Drizzle 迁移记录。
 - [ ] 在 schema 完整后触发并核验公开目录幂等种子，确认中药详情、经方与古籍查询均可读取且不产生个人数据。
-- [x] 修复 Vercel 上 React 单页应用的深链接回退规则，确保 `/bencao`、`/jingfang`、`/guji` 直达不再返回 404，且 `/api/*` 继续由函数处理。
+- [ ] 修复 Vercel 上 React 单页应用的深链接回退规则，确保 `/bencao`、`/jingfang`、`/guji` 直达不再返回 404，且 `/api/*` 继续由函数处理。
 - [ ] 修正 SPA 回退规则对 `/api/trpc/*` 的误拦截：保留本草等深链接访问，同时恢复 tRPC 目录查询和健康检查函数路由。
 - [ ] 在前 3 批 schema 已存在的前提下补齐第 4、5 批知识库与版本对照表，并核验 schema 里程碑全部为 ready 后再触发目录种子。
