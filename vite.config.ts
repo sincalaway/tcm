@@ -165,11 +165,9 @@ export default defineConfig({
   root: path.resolve(import.meta.dirname, "client"),
   publicDir: path.resolve(import.meta.dirname, "client", "public"),
   build: {
-    // Vercel serves root-level public/** from its CDN. Keep the existing
-    // dist/public output for local/Manus production builds.
-    outDir: process.env.VERCEL
-      ? path.resolve(import.meta.dirname, "public")
-      : path.resolve(import.meta.dirname, "dist/public"),
+    // Keep one deterministic output for local builds and Vercel's configured
+    // static output directory.
+    outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
     reportCompressedSize: false,
   },
