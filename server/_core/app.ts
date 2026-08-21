@@ -24,6 +24,7 @@ export function createApp() {
     let databaseReachable: boolean | null = null;
     let schemaInitialized: boolean | null = null;
     let schemaTableCount: number | null = null;
+    let schemaMilestones: Record<string, boolean> | null = null;
 
     if (databaseConfigured) {
       try {
@@ -38,6 +39,24 @@ export function createApp() {
           const row = Array.isArray(firstResult) ? firstResult[0] : firstResult;
           schemaTableCount = Number((row as { tableCount?: unknown } | undefined)?.tableCount ?? 0);
           schemaInitialized = schemaTableCount === 4;
+
+          const milestoneResult = await db.execute(
+            sql`SELECT table_name AS tableName FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name IN ('content_sources', 'herbs', 'formulas', 'classics', 'classic_chapters', 'classic_passages', 'formula_passage_mappings', 'learning_path_progress', 'learning_goals', 'review_reminders', 'knowledge_documents', 'ai_study_conversations', 'ai_study_messages', 'ai_study_summaries', 'classic_passage_versions')`
+          );
+          const milestoneRows = Array.isArray(milestoneResult) ? milestoneResult[0] : [];
+          const availableTables = new Set(
+            (Array.isArray(milestoneRows) ? milestoneRows : []).map(
+              (candidate) => String((candidate as { tableName?: unknown }).tableName)
+            )
+          );
+          const hasAll = (tableNames: string[]) => tableNames.every((tableName) => availableTables.has(tableName));
+          schemaMilestones = {
+            coreCatalog: hasAll(["content_sources", "herbs", "formulas", "classics", "classic_chapters"]),
+            passageGraph: hasAll(["classic_passages", "formula_passage_mappings"]),
+            studyTools: hasAll(["learning_path_progress", "learning_goals", "review_reminders"]),
+            knowledgeBase: hasAll(["knowledge_documents", "ai_study_conversations", "ai_study_messages", "ai_study_summaries"]),
+            editionComparison: hasAll(["classic_passage_versions"]),
+          };
         } else {
           databaseReachable = false;
         }
@@ -56,6 +75,7 @@ export function createApp() {
       databaseReachable,
       schemaInitialized,
       schemaTableCount,
+      schemaMilestones,
       oauthConfigured: Boolean(process.env.OAUTH_SERVER_URL && process.env.VITE_APP_ID),
       storageConfigured: Boolean(process.env.BUILT_IN_FORGE_API_URL && process.env.BUILT_IN_FORGE_API_KEY),
     });
