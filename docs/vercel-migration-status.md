@@ -27,3 +27,5 @@ TLS 已建立，但运行日志显示数据库认证被拒绝。因此 Vercel �
 ## Schema 初始化策略
 
 已审查仓库内的 `0000`—`0005` 六份 Drizzle SQL：它们仅包含建表、建索引及向知识库表添加正文列的操作，不含删除、截断或变更既有列类型的语句。Vercel 的 Preview 构建将先执行 `drizzle-kit migrate`，迁移记录写入 Drizzle 自身的迁移日志表，后续构建会幂等跳过已完成步骤。Drizzle Kit 亦将对 `*.tidbcloud.com` 连接显式使用 TLS 证书校验。
+
+首次构建期迁移在约 20 秒的“applying migrations”状态后以退出码 1 结束，Vercel 事件流没有提供底层 SQL 或连接错误。为避免盲目重复可能已部分执行的 DDL，构建期迁移已暂时暂停；健康检查将以只读方式确认 `users` 表是否已存在，再根据结果选择幂等修复策略。

@@ -22,6 +22,7 @@ export function createApp() {
   app.get("/api/health", async (_req, res) => {
     const databaseConfigured = Boolean(process.env.DATABASE_URL);
     let databaseReachable: boolean | null = null;
+    let schemaInitialized: boolean | null = null;
 
     if (databaseConfigured) {
       try {
@@ -29,6 +30,10 @@ export function createApp() {
         if (db) {
           await db.execute(sql`SELECT 1`);
           databaseReachable = true;
+          const rows = await db.execute(
+            sql`SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'users' LIMIT 1`
+          );
+          schemaInitialized = Array.isArray(rows) && rows.length > 0;
         } else {
           databaseReachable = false;
         }
@@ -45,6 +50,7 @@ export function createApp() {
       runtime: process.env.VERCEL ? "vercel" : "node",
       databaseConfigured,
       databaseReachable,
+      schemaInitialized,
       oauthConfigured: Boolean(process.env.OAUTH_SERVER_URL && process.env.VITE_APP_ID),
       storageConfigured: Boolean(process.env.BUILT_IN_FORGE_API_URL && process.env.BUILT_IN_FORGE_API_KEY),
     });
