@@ -49,3 +49,5 @@ Preview 的 React 深链接回退已生效：直接访问 `/bencao?q=桂枝` 会
 Vercel 官方 Express 指南推荐以 `api/index` 作为单一函数入口，并把请求重写至 `/api`。迁移实现将采用该模式：先用一个 `/api/:path*` rewrite 命中函数，再对非 API 的前端路径回退至 `index.html`。这避免使用动态函数文件名与自定义 routes 组合时出现的 API 路径丢失问题。[Vercel Express 指南](https://vercel.com/kb/guide/using-express-with-vercel)
 
 单入口函数验证已确认 Vercel 与 TiDB 的连接和 tRPC 路径均可用。公开目录恢复在创建 `knowledge_documents` 时被 TiDB 的唯一索引字节限制阻断：原 `storageKey varchar(1024)` 在默认 UTF-8 字符集下可能超过索引上限。该列已收紧为 `varchar(768)`，仍覆盖应用生成的 `knowledge/{userId}/{timestamp}-{title}` 对象键格式；变更仅影响尚未创建的空表，不修改任何用户文件或记录。[TiDB CREATE INDEX 语法](https://docs.pingcap.com/tidb/stable/sql-statement-create-index/)
+
+单入口函数的 `/api/health` 已正常响应，但浏览器资源记录显示 `/api/trpc/catalog...` 未被单段路径模式覆盖。API rewrite 已改为 `/api/(.*)` 正则 catch-all，以覆盖 tRPC 的多层路径并保持 Express 的原始路由分派。

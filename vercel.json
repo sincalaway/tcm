@@ -5,7 +5,7 @@
   "outputDirectory": "dist/public",
   "rewrites": [
     {
-      "source": "/api/:path*",
+      "source": "/api/(.*)",
       "destination": "/api"
     },
     {
