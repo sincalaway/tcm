@@ -98,3 +98,11 @@
 - [x] 为章节引用 Markdown 导出补充可执行回归测试，断言文件名、篇章标题、条文深链与原典 URL。
 - [x] 为打印版式补充可验证的 DOM/样式断言，覆盖打印按钮触发与关键 print CSS 隐藏规则。
 - [ ] 保存发布 checkpoint，并将本轮条文、异文对照、导出打印与自动化测试升级同步至 GitHub main。
+- [ ] 触发 `feat/vercel-fullstack-runtime` 的新 Vercel 预览部署，并核验 `DATABASE_URL` 已被运行时识别。
+- [ ] 生成、审查并提交可重复执行的 TiDB 初始 schema 迁移，避免依赖未追踪的 Drizzle 元数据。
+- [ ] 在空白 `tcm` 数据库执行 schema 迁移，并验证公开中药、经方和古籍查询可正常读取。
+- [ ] 执行可重复的公开目录种子，核验中药详情 API 返回数据且不写入个人资料。
+- [ ] 以 GitHub OAuth 替换 Manus OAuth，保护回调状态、会话 Cookie 与登录用户隔离边界。
+- [ ] 以 Vercel Blob 替换内置对象存储，保留知识库文件元数据与用户访问隔离。
+- [ ] 补充迁移、OAuth 与 Blob 链路测试，执行类型检查、Vitest 与预览环境核心路径验收。
+- [ ] 将验证通过的迁移提交推送到 `feat/vercel-fullstack-runtime`，不合并或覆盖 `main`。
