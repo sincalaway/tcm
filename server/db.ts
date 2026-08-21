@@ -45,7 +45,22 @@ const wikisourceSearchCache = new Map<string, { expiresAt: number; results: Wiki
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
-      _db = drizzle(process.env.DATABASE_URL);
+      const connectionString = process.env.DATABASE_URL;
+      const hostname = new URL(connectionString).hostname;
+
+      // TiDB Cloud Serverless rejects unencrypted connections. Configure TLS in
+      // code rather than relying on a URL query parameter so the same secret can
+      // safely be used by Vercel's serverless runtime and local tooling.
+      if (hostname.endsWith(".tidbcloud.com")) {
+        _db = drizzle({
+          connection: {
+            uri: connectionString,
+            ssl: { rejectUnauthorized: true },
+          },
+        });
+      } else {
+        _db = drizzle(connectionString);
+      }
     } catch (error) {
       console.warn("[Database] Failed to connect:", error);
       _db = null;
