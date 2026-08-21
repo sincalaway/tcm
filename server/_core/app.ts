@@ -23,6 +23,7 @@ export function createApp() {
     const databaseConfigured = Boolean(process.env.DATABASE_URL);
     let databaseReachable: boolean | null = null;
     let schemaInitialized: boolean | null = null;
+    let schemaTableCount: number | null = null;
 
     if (databaseConfigured) {
       try {
@@ -30,10 +31,13 @@ export function createApp() {
         if (db) {
           await db.execute(sql`SELECT 1`);
           databaseReachable = true;
-          const rows = await db.execute(
-            sql`SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'users' LIMIT 1`
+          const result = await db.execute(
+            sql`SELECT COUNT(*) AS tableCount FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name IN ('users', 'herbs', 'knowledge_documents', 'classic_passage_versions')`
           );
-          schemaInitialized = Array.isArray(rows) && rows.length > 0;
+          const firstResult = Array.isArray(result) ? result[0] : undefined;
+          const row = Array.isArray(firstResult) ? firstResult[0] : firstResult;
+          schemaTableCount = Number((row as { tableCount?: unknown } | undefined)?.tableCount ?? 0);
+          schemaInitialized = schemaTableCount === 4;
         } else {
           databaseReachable = false;
         }
@@ -51,6 +55,7 @@ export function createApp() {
       databaseConfigured,
       databaseReachable,
       schemaInitialized,
+      schemaTableCount,
       oauthConfigured: Boolean(process.env.OAUTH_SERVER_URL && process.env.VITE_APP_ID),
       storageConfigured: Boolean(process.env.BUILT_IN_FORGE_API_URL && process.env.BUILT_IN_FORGE_API_KEY),
     });

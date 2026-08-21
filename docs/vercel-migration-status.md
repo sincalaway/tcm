@@ -29,3 +29,7 @@ TLS 已建立，但运行日志显示数据库认证被拒绝。因此 Vercel �
 已审查仓库内的 `0000`—`0005` 六份 Drizzle SQL：它们仅包含建表、建索引及向知识库表添加正文列的操作，不含删除、截断或变更既有列类型的语句。Vercel 的 Preview 构建将先执行 `drizzle-kit migrate`，迁移记录写入 Drizzle 自身的迁移日志表，后续构建会幂等跳过已完成步骤。Drizzle Kit 亦将对 `*.tidbcloud.com` 连接显式使用 TLS 证书校验。
 
 首次构建期迁移在约 20 秒的“applying migrations”状态后以退出码 1 结束，Vercel 事件流没有提供底层 SQL 或连接错误。为避免盲目重复可能已部分执行的 DDL，构建期迁移已暂时暂停；健康检查将以只读方式确认 `users` 表是否已存在，再根据结果选择幂等修复策略。
+
+最新 Preview 域名已被 Vercel 认证保护，未携带授权绕过 Cookie 的公开请求会重定向至 Vercel 登录页；该重定向不代表应用或 TiDB 运行时错误。后续验证将以已登录的部署控制台和受保护请求日志为准。
+
+通过已登录控制台的同源健康检查已确认：TiDB 连接可用，且 `users`、`herbs`、`knowledge_documents`、`classic_passage_versions` 四个覆盖初始目录、个人知识库与版本对照的 schema 里程碑表均已存在。健康检查将进一步返回该四表的只读计数，以避免仅凭单表存在误判迁移完整性。
