@@ -41,3 +41,5 @@ Preview 的 React 深链接回退已生效：直接访问 `/bencao?q=桂枝` 会
 后续同源网络检查发现，当前 SPA 回退配置把 `/api/trpc/*` 意外重写为静态入口，导致 tRPC 请求返回 Vercel `404`。因此“0 条药材”尚不能作为种子状态结论；必须先恢复 API 路由，再检查目录种子和 TiDB 表数据。
 
 将 API 分派置于 SPA 回退之前后，最新 Preview 的静态资源被通配路由同时拦截，导致前端空白。已在 API 规则与 SPA 回退之间恢复 Vercel 的 filesystem 路由阶段：API 先进入 Express，静态入口和资源文件按文件系统提供，只有其余前端路径才回退至 `index.html`。
+
+最新只读健康检查显示 `coreCatalog`、`passageGraph` 与 `studyTools` 已就绪，而 `knowledgeBase`、`editionComparison` 尚缺。这说明首次 Drizzle 迁移已提交前 3 批的迁移记录并在第 4 批中止；将重新启用 `drizzle-kit migrate`，使其按迁移日志跳过已完成批次，仅继续第 4、5 批。公开目录种子将在全部阶段就绪后再执行。
