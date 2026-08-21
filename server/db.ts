@@ -1,4 +1,5 @@
 import { and, desc, eq, inArray, isNull, like, or } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   aiStudyConversations,
@@ -41,6 +42,59 @@ let seedPromise: Promise<void> | null = null;
 let catalogFiltersCache: { expiresAt: number; value: Awaited<ReturnType<typeof buildCatalogFilters>> } | null = null;
 type WikisourceSearchResult = { pageId: number; title: string; timestamp: string; snippet: string; sourceUrl: string };
 const wikisourceSearchCache = new Map<string, { expiresAt: number; results: WikisourceSearchResult[] }>();
+
+/**
+ * Recovers the two schema batches that can be left incomplete if a serverless
+ * build ends while Drizzle is applying DDL. Every statement is idempotent and
+ * creates structure only; it never deletes or mutates user-owned records.
+ */
+export const CATALOG_SCHEMA_RECOVERY_STATEMENTS = [
+  `CREATE TABLE IF NOT EXISTS \`ai_study_summaries\` (
+    \`id\` int AUTO_INCREMENT NOT NULL,
+    \`conversationId\` int NOT NULL,
+    \`userId\` int NOT NULL,
+    \`content\` text NOT NULL,
+    \`sourceMessageCount\` int NOT NULL,
+    \`createdAt\` timestamp NOT NULL DEFAULT (now()),
+    \`updatedAt\` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT \`ai_study_summaries_id\` PRIMARY KEY(\`id\`),
+    CONSTRAINT \`ai_study_summary_conversation_unique\` UNIQUE(\`conversationId\`)
+  )`,
+  `CREATE TABLE IF NOT EXISTS \`knowledge_documents\` (
+    \`id\` int AUTO_INCREMENT NOT NULL,
+    \`userId\` int NOT NULL,
+    \`title\` varchar(255) NOT NULL,
+    \`mimeType\` varchar(128) NOT NULL,
+    \`sizeBytes\` int NOT NULL,
+    \`storageKey\` varchar(1024) NOT NULL,
+    \`storageUrl\` varchar(1024) NOT NULL,
+    \`textPreview\` text,
+    \`createdAt\` timestamp NOT NULL DEFAULT (now()),
+    \`updatedAt\` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT \`knowledge_documents_id\` PRIMARY KEY(\`id\`),
+    CONSTRAINT \`knowledge_documents_storageKey_unique\` UNIQUE(\`storageKey\`)
+  )`,
+  "ALTER TABLE `knowledge_documents` ADD COLUMN IF NOT EXISTS `textContent` mediumtext",
+  "CREATE INDEX IF NOT EXISTS `ai_study_summaries_user_idx` ON `ai_study_summaries` (`userId`, `updatedAt`)",
+  "CREATE INDEX IF NOT EXISTS `knowledge_documents_user_idx` ON `knowledge_documents` (`userId`, `updatedAt`)",
+  "CREATE INDEX IF NOT EXISTS `knowledge_documents_title_idx` ON `knowledge_documents` (`userId`, `title`)",
+  `CREATE TABLE IF NOT EXISTS \`classic_passage_versions\` (
+    \`id\` int AUTO_INCREMENT NOT NULL,
+    \`passageId\` int NOT NULL,
+    \`editionLabel\` varchar(255) NOT NULL,
+    \`text\` text NOT NULL,
+    \`variantNote\` text,
+    \`verificationStatus\` enum('verified','pending','reference_only') NOT NULL DEFAULT 'pending',
+    \`sourceReference\` varchar(255) NOT NULL,
+    \`sourceUrl\` varchar(1024) NOT NULL,
+    \`createdAt\` timestamp NOT NULL DEFAULT (now()),
+    \`updatedAt\` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT \`classic_passage_versions_id\` PRIMARY KEY(\`id\`),
+    CONSTRAINT \`classic_passage_version_unique\` UNIQUE(\`passageId\`, \`editionLabel\`)
+  )`,
+  "CREATE INDEX IF NOT EXISTS `classic_passage_versions_passage_idx` ON `classic_passage_versions` (`passageId`)",
+  "CREATE INDEX IF NOT EXISTS `classic_passage_versions_status_idx` ON `classic_passage_versions` (`verificationStatus`)",
+] as const;
 
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
@@ -107,6 +161,9 @@ export async function ensureCatalogSeed() {
 async function seedCatalog() {
   const db = await getDb();
   if (!db) return;
+  for (const statement of CATALOG_SCHEMA_RECOVERY_STATEMENTS) {
+    await db.execute(sql.raw(statement));
+  }
   // 首次部署时采用批量写入；后续请求走唯一键的轻量 no-op，不再产生数十次串行往返。
   await db.insert(contentSources).values(sourceSeed).onDuplicateKeyUpdate({ set: { updatedAt: new Date() } });
   const allSources = await db.select().from(contentSources);
