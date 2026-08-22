@@ -5111,8 +5111,12 @@ async function exchangeGitHubCode(code, redirectUri) {
     headers: { Accept: "application/json", "Content-Type": "application/x-www-form-urlencoded" },
     body
   });
-  if (!response.ok) throw new Error("GitHub token exchange failed");
   const payload = await response.json();
+  if (!response.ok || !payload.access_token) {
+    const errorCode = typeof payload.error === "string" ? payload.error : "missing_access_token";
+    console.warn(`[OAuth] GitHub token exchange rejected: HTTP ${response.status}, ${errorCode}`);
+    throw new Error("GitHub token exchange failed");
+  }
   if (!payload.access_token) throw new Error("GitHub token response missing access token");
   return payload.access_token;
 }

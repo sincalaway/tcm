@@ -59,3 +59,7 @@ Vercel 官方 Express 指南推荐以 `api/index` 作为单一函数入口，并
 ## 2026-08-22：GitHub OAuth Preview 实现就绪
 
 Preview 环境已配置 GitHub OAuth 客户端变量。应用现在通过 `/api/oauth/github` 发起授权，并由 `/api/oauth/callback` 校验一次性 CSRF state、验证回调源站、以服务器端授权码交换用户资料后创建加密会话 Cookie。身份以稳定的 `github:{numericId}` 形式写入现有用户表，私有邮箱仅在 GitHub 返回已验证邮箱时保存。浏览器端已移除 Manus sessionStorage 镜像；尚待用户在 GitHub 授权页完成一次真实授权，以核验交互回调和笔记/收藏隔离链路。
+
+用户补齐 `GITHUB_CLIENT_ID` 并重新部署 Preview 后，稳定 Preview 健康检查已返回 `oauthConfigured: true`，同时 TiDB 连接和完整 schema 状态保持为 true。环境变量值始终未被读取或记录；下一步只需用户在 GitHub 授权页确认登录，完成回调端到端验证。
+
+首次真实 GitHub 授权已到达 `/api/oauth/callback`，但服务器端返回 500。诊断版健康检查显示 `sessionConfigured: false`，而 OAuth 与数据库均为 true；因此当前阻塞在会话签名密钥未配置或长度不足，尚未产生持久化的用户会话。需要为 Preview 设置独立、随机且至少 32 字符的 `JWT_SECRET` 后重新部署，再重试授权。
