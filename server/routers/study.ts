@@ -9,6 +9,10 @@ const resourceInput = z.object({ resourceType: z.enum(["herb", "formula", "class
 const goalInput = z.object({ title: z.string().trim().min(1).max(255), metric: z.enum(["path_steps", "reading_entries", "study_notes"]), targetCount: z.number().int().min(1).max(365), deadlineAt: z.coerce.date().nullable().optional() });
 const reminderInput = z.object({ goalId: z.number().int().positive().nullable().optional(), title: z.string().trim().min(1).max(255), intervalDays: z.number().int().min(1).max(60), hourLocal: z.number().int().min(0).max(23) });
 const getSessionToken = (cookieHeader: string | undefined) => parseCookie(cookieHeader ?? "")[COOKIE_NAME] ?? "";
+const getVercelOidcToken = (headers: Record<string, string | string[] | undefined>) => {
+  const token = headers["x-vercel-oidc-token"];
+  return typeof token === "string" && token.length > 0 ? token : undefined;
+};
 const toUtcHour = (hourLocal: number) => (hourLocal + 16) % 24; // 中国标准时间（UTC+8）换算为调度服务的 UTC 小时。
 const dailyCron = (hourUtc: number) => `0 0 ${hourUtc} * * *`;
 
@@ -60,9 +64,15 @@ export const studyRouter = router({
   knowledge: router({
     list: protectedProcedure.input(z.object({ query: z.string().trim().max(80).optional() }).optional()).query(({ ctx, input }) => listKnowledgeDocuments(ctx.user.id, input?.query)),
     search: protectedProcedure.input(z.object({ query: z.string().trim().min(1).max(80) })).query(({ ctx, input }) => searchKnowledgeDocuments(ctx.user.id, input.query)),
-    upload: protectedProcedure.input(z.object({ fileName: z.string().trim().min(1).max(255), mimeType: z.enum(["text/plain", "text/markdown", "application/pdf"]), base64: z.string().min(4).max(7_200_000) })).mutation(({ ctx, input }) => uploadKnowledgeDocument(ctx.user.id, input)),
+    upload: protectedProcedure.input(z.object({ fileName: z.string().trim().min(1).max(255), mimeType: z.enum(["text/plain", "text/markdown", "application/pdf"]), base64: z.string().min(4).max(7_200_000) })).mutation(({ ctx, input }) => {
+      const oidcToken = getVercelOidcToken(ctx.req.headers);
+      return oidcToken ? uploadKnowledgeDocument(ctx.user.id, input, oidcToken) : uploadKnowledgeDocument(ctx.user.id, input);
+    }),
     download: protectedProcedure.input(z.object({ id: z.number().int().positive() })).mutation(({ ctx, input }) => getKnowledgeDocumentDownload(ctx.user.id, input.id)),
-    delete: protectedProcedure.input(z.object({ id: z.number().int().positive() })).mutation(({ ctx, input }) => deleteKnowledgeDocument(ctx.user.id, input.id)),
+    delete: protectedProcedure.input(z.object({ id: z.number().int().positive() })).mutation(({ ctx, input }) => {
+      const oidcToken = getVercelOidcToken(ctx.req.headers);
+      return oidcToken ? deleteKnowledgeDocument(ctx.user.id, input.id, oidcToken) : deleteKnowledgeDocument(ctx.user.id, input.id);
+    }),
   }),
   saved: router({
     list: protectedProcedure.query(({ ctx }) => listSavedItems(ctx.user.id)),

@@ -81,7 +81,7 @@ export function createApp() {
       schemaMilestones,
       oauthConfigured: Boolean(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET),
       sessionConfigured: Boolean(process.env.JWT_SECRET && process.env.JWT_SECRET.length >= 32),
-      storageConfigured: isKnowledgeBlobConfigured(),
+      storageConfigured: isKnowledgeBlobConfigured(_req.header("x-vercel-oidc-token") ?? undefined),
     });
   });
 
@@ -95,7 +95,7 @@ export function createApp() {
     try {
       const document = await getKnowledgeDocumentBlobForUser(user.id, id);
       if (!document) return res.status(404).json({ error: "Document not found" });
-      const result = await getPrivateKnowledgeBlob(document.storageKey, req.header("if-none-match") ?? undefined);
+      const result = await getPrivateKnowledgeBlob(document.storageKey, req.header("if-none-match") ?? undefined, req.header("x-vercel-oidc-token") ?? undefined);
       if (!result) return res.status(404).json({ error: "Document not found" });
       if (result.statusCode === 304) {
         return res.status(304).set({ ETag: result.blob.etag, "Cache-Control": "private, no-cache" }).end();

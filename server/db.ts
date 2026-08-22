@@ -741,7 +741,7 @@ function normalizeKnowledgeFileName(fileName: string) {
   return normalized.slice(0, 180) || "knowledge-document";
 }
 
-export async function uploadKnowledgeDocument(userId: number, input: { fileName: string; mimeType: string; base64: string }) {
+export async function uploadKnowledgeDocument(userId: number, input: { fileName: string; mimeType: string; base64: string }, oidcToken?: string) {
   const db = await getDb(); if (!db) throw new Error("数据库暂不可用");
   if (!KNOWLEDGE_ALLOWED_TYPES.has(input.mimeType)) throw new Error("仅支持 TXT、Markdown 或 PDF 文件");
   const buffer = Buffer.from(input.base64, "base64");
@@ -753,7 +753,7 @@ export async function uploadKnowledgeDocument(userId: number, input: { fileName:
     try { const extracted = await extractText(new Uint8Array(buffer), { mergePages: true }); textContent = extracted.text.replace(/\s+/g, " ").trim() || null; } catch { textContent = null; }
   }
   if (textContent && Buffer.byteLength(textContent, "utf8") > KNOWLEDGE_MAX_TEXT_BYTES) throw new Error("文档可检索正文过长，请拆分后上传");
-  const { key, url } = await putPrivateKnowledgeBlob(`knowledge/${userId}/${Date.now()}-${title}`, buffer, input.mimeType);
+  const { key, url } = await putPrivateKnowledgeBlob(`knowledge/${userId}/${Date.now()}-${title}`, buffer, input.mimeType, oidcToken);
   const textPreview = textContent?.slice(0, 6000) || null;
   const result = await db.insert(knowledgeDocuments).values({ userId, title, mimeType: input.mimeType, sizeBytes: buffer.length, storageKey: key, storageUrl: url, textPreview, textContent });
   return { id: Number(result[0].insertId), title, mimeType: input.mimeType, sizeBytes: buffer.length };
@@ -808,11 +808,11 @@ export async function getKnowledgeDocumentBlobForUser(userId: number, id: number
   return (await db.select({ id: knowledgeDocuments.id, title: knowledgeDocuments.title, mimeType: knowledgeDocuments.mimeType, storageKey: knowledgeDocuments.storageKey }).from(knowledgeDocuments).where(and(eq(knowledgeDocuments.id, id), eq(knowledgeDocuments.userId, userId))).limit(1))[0];
 }
 
-export async function deleteKnowledgeDocument(userId: number, id: number) {
+export async function deleteKnowledgeDocument(userId: number, id: number, oidcToken?: string) {
   const db = await getDb(); if (!db) throw new Error("数据库暂不可用");
   const row = await getKnowledgeDocumentBlobForUser(userId, id);
   if (!row) return { success: true };
-  await deletePrivateKnowledgeBlob(row.storageKey);
+  await deletePrivateKnowledgeBlob(row.storageKey, oidcToken);
   await db.delete(knowledgeDocuments).where(and(eq(knowledgeDocuments.id, id), eq(knowledgeDocuments.userId, userId)));
   return { success: true };
 }

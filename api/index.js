@@ -3019,38 +3019,40 @@ import { del, get, put } from "@vercel/blob";
 function normalizeKey(key) {
   return key.replace(/^\/+/, "");
 }
-function assertBlobConfigured() {
-  const hasOidc = Boolean(process.env.BLOB_STORE_ID && process.env.VERCEL_OIDC_TOKEN);
+function assertBlobConfigured(oidcToken) {
+  const hasOidc = Boolean(process.env.BLOB_STORE_ID && (oidcToken || process.env.VERCEL_OIDC_TOKEN));
   const hasReadWriteToken = Boolean(process.env.BLOB_READ_WRITE_TOKEN);
   if (!hasOidc && !hasReadWriteToken) {
     throw new Error("\u77E5\u8BC6\u5E93\u79C1\u6709\u5B58\u50A8\u6682\u672A\u914D\u7F6E\uFF0C\u8BF7\u7A0D\u540E\u91CD\u8BD5\u3002");
   }
 }
-async function putPrivateKnowledgeBlob(key, data, contentType) {
-  assertBlobConfigured();
+async function putPrivateKnowledgeBlob(key, data, contentType, oidcToken) {
+  assertBlobConfigured(oidcToken);
   const body = typeof data === "string" || Buffer.isBuffer(data) ? data : Buffer.from(data);
   const blob = await put(normalizeKey(key), body, {
     access: "private",
     addRandomSuffix: true,
     contentType,
-    cacheControlMaxAge: 60
+    cacheControlMaxAge: 60,
+    ...oidcToken && process.env.BLOB_STORE_ID ? { oidcToken, storeId: process.env.BLOB_STORE_ID } : {}
   });
   return { key: blob.pathname, url: blob.url };
 }
-async function getPrivateKnowledgeBlob(key, ifNoneMatch) {
-  assertBlobConfigured();
+async function getPrivateKnowledgeBlob(key, ifNoneMatch, oidcToken) {
+  assertBlobConfigured(oidcToken);
   return get(normalizeKey(key), {
     access: "private",
-    ifNoneMatch
+    ifNoneMatch,
+    ...oidcToken && process.env.BLOB_STORE_ID ? { oidcToken, storeId: process.env.BLOB_STORE_ID } : {}
   });
 }
-async function deletePrivateKnowledgeBlob(key) {
-  assertBlobConfigured();
-  await del(normalizeKey(key));
+async function deletePrivateKnowledgeBlob(key, oidcToken) {
+  assertBlobConfigured(oidcToken);
+  await del(normalizeKey(key), oidcToken && process.env.BLOB_STORE_ID ? { oidcToken, storeId: process.env.BLOB_STORE_ID } : void 0);
 }
-function isKnowledgeBlobConfigured() {
+function isKnowledgeBlobConfigured(oidcToken) {
   return Boolean(
-    process.env.BLOB_READ_WRITE_TOKEN || process.env.BLOB_STORE_ID && process.env.VERCEL_OIDC_TOKEN
+    process.env.BLOB_READ_WRITE_TOKEN || process.env.BLOB_STORE_ID && (oidcToken || process.env.VERCEL_OIDC_TOKEN)
   );
 }
 
@@ -3769,7 +3771,7 @@ function normalizeKnowledgeFileName(fileName) {
   const normalized2 = fileName.trim().replace(/[\\/:*?"<>|\u0000-\u001f]/g, "-").replace(/\s+/g, " ");
   return normalized2.slice(0, 180) || "knowledge-document";
 }
-async function uploadKnowledgeDocument(userId, input) {
+async function uploadKnowledgeDocument(userId, input, oidcToken) {
   const db = await getDb();
   if (!db) throw new Error("\u6570\u636E\u5E93\u6682\u4E0D\u53EF\u7528");
   if (!KNOWLEDGE_ALLOWED_TYPES.has(input.mimeType)) throw new Error("\u4EC5\u652F\u6301 TXT\u3001Markdown \u6216 PDF \u6587\u4EF6");
@@ -3787,7 +3789,7 @@ async function uploadKnowledgeDocument(userId, input) {
     }
   }
   if (textContent && Buffer.byteLength(textContent, "utf8") > KNOWLEDGE_MAX_TEXT_BYTES) throw new Error("\u6587\u6863\u53EF\u68C0\u7D22\u6B63\u6587\u8FC7\u957F\uFF0C\u8BF7\u62C6\u5206\u540E\u4E0A\u4F20");
-  const { key, url } = await putPrivateKnowledgeBlob(`knowledge/${userId}/${Date.now()}-${title}`, buffer, input.mimeType);
+  const { key, url } = await putPrivateKnowledgeBlob(`knowledge/${userId}/${Date.now()}-${title}`, buffer, input.mimeType, oidcToken);
   const textPreview = textContent?.slice(0, 6e3) || null;
   const result = await db.insert(knowledgeDocuments).values({ userId, title, mimeType: input.mimeType, sizeBytes: buffer.length, storageKey: key, storageUrl: url, textPreview, textContent });
   return { id: Number(result[0].insertId), title, mimeType: input.mimeType, sizeBytes: buffer.length };
@@ -3841,12 +3843,12 @@ async function getKnowledgeDocumentBlobForUser(userId, id) {
   if (!db) throw new Error("\u6570\u636E\u5E93\u6682\u4E0D\u53EF\u7528");
   return (await db.select({ id: knowledgeDocuments.id, title: knowledgeDocuments.title, mimeType: knowledgeDocuments.mimeType, storageKey: knowledgeDocuments.storageKey }).from(knowledgeDocuments).where(and(eq(knowledgeDocuments.id, id), eq(knowledgeDocuments.userId, userId))).limit(1))[0];
 }
-async function deleteKnowledgeDocument(userId, id) {
+async function deleteKnowledgeDocument(userId, id, oidcToken) {
   const db = await getDb();
   if (!db) throw new Error("\u6570\u636E\u5E93\u6682\u4E0D\u53EF\u7528");
   const row2 = await getKnowledgeDocumentBlobForUser(userId, id);
   if (!row2) return { success: true };
-  await deletePrivateKnowledgeBlob(row2.storageKey);
+  await deletePrivateKnowledgeBlob(row2.storageKey, oidcToken);
   await db.delete(knowledgeDocuments).where(and(eq(knowledgeDocuments.id, id), eq(knowledgeDocuments.userId, userId)));
   return { success: true };
 }
@@ -4673,6 +4675,10 @@ var resourceInput = z4.object({ resourceType: z4.enum(["herb", "formula", "class
 var goalInput = z4.object({ title: z4.string().trim().min(1).max(255), metric: z4.enum(["path_steps", "reading_entries", "study_notes"]), targetCount: z4.number().int().min(1).max(365), deadlineAt: z4.coerce.date().nullable().optional() });
 var reminderInput = z4.object({ goalId: z4.number().int().positive().nullable().optional(), title: z4.string().trim().min(1).max(255), intervalDays: z4.number().int().min(1).max(60), hourLocal: z4.number().int().min(0).max(23) });
 var getSessionToken = (cookieHeader) => parseCookie(cookieHeader ?? "")[COOKIE_NAME] ?? "";
+var getVercelOidcToken = (headers) => {
+  const token = headers["x-vercel-oidc-token"];
+  return typeof token === "string" && token.length > 0 ? token : void 0;
+};
 var toUtcHour = (hourLocal) => (hourLocal + 16) % 24;
 var dailyCron = (hourUtc) => `0 0 ${hourUtc} * * *`;
 var studyRouter = router({
@@ -4727,9 +4733,15 @@ var studyRouter = router({
   knowledge: router({
     list: protectedProcedure.input(z4.object({ query: z4.string().trim().max(80).optional() }).optional()).query(({ ctx, input }) => listKnowledgeDocuments(ctx.user.id, input?.query)),
     search: protectedProcedure.input(z4.object({ query: z4.string().trim().min(1).max(80) })).query(({ ctx, input }) => searchKnowledgeDocuments(ctx.user.id, input.query)),
-    upload: protectedProcedure.input(z4.object({ fileName: z4.string().trim().min(1).max(255), mimeType: z4.enum(["text/plain", "text/markdown", "application/pdf"]), base64: z4.string().min(4).max(72e5) })).mutation(({ ctx, input }) => uploadKnowledgeDocument(ctx.user.id, input)),
+    upload: protectedProcedure.input(z4.object({ fileName: z4.string().trim().min(1).max(255), mimeType: z4.enum(["text/plain", "text/markdown", "application/pdf"]), base64: z4.string().min(4).max(72e5) })).mutation(({ ctx, input }) => {
+      const oidcToken = getVercelOidcToken(ctx.req.headers);
+      return oidcToken ? uploadKnowledgeDocument(ctx.user.id, input, oidcToken) : uploadKnowledgeDocument(ctx.user.id, input);
+    }),
     download: protectedProcedure.input(z4.object({ id: z4.number().int().positive() })).mutation(({ ctx, input }) => getKnowledgeDocumentDownload(ctx.user.id, input.id)),
-    delete: protectedProcedure.input(z4.object({ id: z4.number().int().positive() })).mutation(({ ctx, input }) => deleteKnowledgeDocument(ctx.user.id, input.id))
+    delete: protectedProcedure.input(z4.object({ id: z4.number().int().positive() })).mutation(({ ctx, input }) => {
+      const oidcToken = getVercelOidcToken(ctx.req.headers);
+      return oidcToken ? deleteKnowledgeDocument(ctx.user.id, input.id, oidcToken) : deleteKnowledgeDocument(ctx.user.id, input.id);
+    })
   }),
   saved: router({
     list: protectedProcedure.query(({ ctx }) => listSavedItems(ctx.user.id)),
@@ -5279,7 +5291,7 @@ function createApp() {
       schemaMilestones,
       oauthConfigured: Boolean(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET),
       sessionConfigured: Boolean(process.env.JWT_SECRET && process.env.JWT_SECRET.length >= 32),
-      storageConfigured: isKnowledgeBlobConfigured()
+      storageConfigured: isKnowledgeBlobConfigured(_req.header("x-vercel-oidc-token") ?? void 0)
     });
   });
   registerStorageProxy(app);
@@ -5292,7 +5304,7 @@ function createApp() {
     try {
       const document = await getKnowledgeDocumentBlobForUser(user.id, id);
       if (!document) return res.status(404).json({ error: "Document not found" });
-      const result = await getPrivateKnowledgeBlob(document.storageKey, req.header("if-none-match") ?? void 0);
+      const result = await getPrivateKnowledgeBlob(document.storageKey, req.header("if-none-match") ?? void 0, req.header("x-vercel-oidc-token") ?? void 0);
       if (!result) return res.status(404).json({ error: "Document not found" });
       if (result.statusCode === 304) {
         return res.status(304).set({ ETag: result.blob.etag, "Cache-Control": "private, no-cache" }).end();
