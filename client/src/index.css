@@ -87,6 +87,7 @@ h1, h2, h3 { font-family: "Noto Serif SC", serif; color: var(--ink); letter-spac
 .header-inner { display: flex; align-items: center; justify-content: space-between; max-width: 1440px; min-height: 74px; padding: 0 4.8vw; margin: 0 auto; }
 .brand-lockup { display: inline-flex; align-items: center; gap: .75rem; min-width: 222px; }
 .brand-seal { width: 42px; height: 42px; padding: 2px; border: 1px solid var(--cinnabar); object-fit: contain; background: #f7f2e7; filter: sepia(1) saturate(5) hue-rotate(335deg) contrast(.86); }
+.brand-seal-icon { display: grid; place-items: center; padding: 0; color: var(--cinnabar); filter: none; }
 .brand-type { display: grid; line-height: 1.1; }
 .brand-type b { font-family: "Noto Serif SC", serif; font-size: 1.22rem; letter-spacing: .12em; font-weight: 700; }
 .brand-type small { margin-top: .3rem; color: var(--ink-soft); font-family: "Noto Serif SC", serif; font-size: .48rem; letter-spacing: .13em; }

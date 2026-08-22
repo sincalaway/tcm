@@ -2,14 +2,12 @@
  * 宋刻书斋：导航借鉴古籍目录签，砚石青为结构色，辰砂红仅用于当前路径与关键提示。
  */
 import { Link, useLocation } from "wouter";
-import { Bell, BookOpenCheck, LogOut, Menu, Search, Upload, X } from "lucide-react";
+import { Bell, BookOpenCheck, Leaf, LogOut, Menu, Search, Upload, X } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { startLogin } from "@/const";
 import { trpc } from "@/lib/trpc";
 import { AiStudyAssistant } from "@/components/AiStudyAssistant";
-
-const sealMark = "/manus-storage/tcm-seal-leaf-mark_31399890.png";
 
 const links = [
   { href: "/", label: "书斋首页" },
@@ -31,7 +29,7 @@ export function SiteChrome({ children }: { children: React.ReactNode }) {
       <header className="site-header">
         <div className="header-inner">
           <Link href="/" className="brand-lockup" aria-label="本草经方首页">
-            <img className="brand-seal" src={sealMark} alt="篆刻式草叶图形标记" />
+            <span className="brand-seal brand-seal-icon" role="img" aria-label="篆刻式草叶图形标记"><Leaf size={23} strokeWidth={1.25} /></span>
             <span className="brand-type">
               <b>本草经方</b>
               <small>一方书案 · 研习索引</small>
