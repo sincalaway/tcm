@@ -99,15 +99,16 @@
 - [x] 为打印版式补充可验证的 DOM/样式断言，覆盖打印按钮触发与关键 print CSS 隐藏规则。
 - [ ] 保存发布 checkpoint，并将本轮条文、异文对照、导出打印与自动化测试升级同步至 GitHub main。
 - [x] 触发 `feat/vercel-fullstack-runtime` 的新 Vercel 预览部署，并核验 `DATABASE_URL` 已被运行时识别和通过 TLS 完成只读连通性检查。
-- [ ] 生成、审查并提交可重复执行的 TiDB 初始 schema 迁移，避免依赖未追踪的 Drizzle 元数据。
-- [ ] 在空白 `tcm` 数据库执行 schema 迁移，并验证公开中药、经方和古籍查询可正常读取。
-- [ ] 执行可重复的公开目录种子，核验中药详情 API 返回数据且不写入个人资料。
+- [x] 审查并提交可重复执行的 TiDB schema 迁移与恢复策略，避免依赖未追踪的 Drizzle 元数据。
+- [x] 在 `tcm` 数据库完成 schema 恢复，并验证公开中药、经方和古籍查询可正常读取。
+- [x] 执行可重复的公开目录种子，核验中药详情 API 返回数据且不写入个人资料。
 - [ ] 以 GitHub OAuth 替换 Manus OAuth，保护回调状态、会话 Cookie 与登录用户隔离边界。
+- [x] 实现 GitHub OAuth 授权起点、授权码交换、用户资料映射与加密会话，移除前端 Manus 会话镜像并添加回归测试。
 - [ ] 以 Vercel Blob 替换内置对象存储，保留知识库文件元数据与用户访问隔离。
 - [ ] 补充迁移、OAuth 与 Blob 链路测试，执行类型检查、Vitest 与预览环境核心路径验收。
 - [ ] 将验证通过的迁移提交推送到 `feat/vercel-fullstack-runtime`，不合并或覆盖 `main`。
 - [ ] 修复 Preview 环境中部分执行的 TiDB schema：先确认两张已创建表均为空，再以幂等 SQL 补齐其余迁移表与 Drizzle 迁移记录。
 - [ ] 在 schema 完整后触发并核验公开目录幂等种子，确认中药详情、经方与古籍查询均可读取且不产生个人数据。
-- [ ] 修复 Vercel 上 React 单页应用的深链接回退规则，确保 `/bencao`、`/jingfang`、`/guji` 直达不再返回 404，且 `/api/*` 继续由函数处理。
-- [ ] 修正 SPA 回退规则对 `/api/trpc/*` 的误拦截：保留本草等深链接访问，同时恢复 tRPC 目录查询和健康检查函数路由。
-- [ ] 在前 3 批 schema 已存在的前提下补齐第 4、5 批知识库与版本对照表，并核验 schema 里程碑全部为 ready 后再触发目录种子。
+- [x] 修复 Vercel 上 React 单页应用的深链接回退规则，确保 `/bencao`、`/jingfang`、`/guji` 直达不再返回 404，且 `/api/*` 继续由函数处理。
+- [x] 修正 SPA 回退规则对 `/api/trpc/*` 的误拦截：保留本草等深链接访问，同时恢复 tRPC 目录查询和健康检查函数路由。
+- [x] 在前 3 批 schema 已存在的前提下补齐第 4、5 批知识库与版本对照表，并核验 schema 里程碑全部为 ready 后再触发目录种子。

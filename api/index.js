@@ -2996,6 +2996,8 @@ var formulaPassageSeed = [
 // server/_core/env.ts
 var ENV = {
   appId: process.env.VITE_APP_ID ?? "",
+  githubClientId: process.env.GITHUB_CLIENT_ID ?? "",
+  githubClientSecret: process.env.GITHUB_CLIENT_SECRET ?? "",
   cookieSecret: process.env.JWT_SECRET ?? "",
   databaseUrl: process.env.DATABASE_URL ?? "",
   oAuthServerUrl: process.env.OAUTH_SERVER_URL ?? "",
@@ -4902,7 +4904,7 @@ var SDKServer = class {
     return this.signSession(
       {
         openId,
-        appId: ENV.appId,
+        appId: "github",
         name: options.name || ""
       },
       options
@@ -4988,22 +4990,6 @@ var SDKServer = class {
     const signedInAt = /* @__PURE__ */ new Date();
     let user = await getUserByOpenId(sessionUserId);
     if (!user) {
-      try {
-        const userInfo = await this.getUserInfoWithJwt(sessionToken ?? "");
-        await upsertUser({
-          openId: userInfo.openId,
-          name: userInfo.name || null,
-          email: userInfo.email ?? null,
-          loginMethod: userInfo.loginMethod ?? userInfo.platform ?? null,
-          lastSignedIn: signedInAt
-        });
-        user = await getUserByOpenId(userInfo.openId);
-      } catch (error) {
-        console.error("[Auth] Failed to sync user from OAuth:", error);
-        throw ForbiddenError("Failed to sync user info");
-      }
-    }
-    if (!user) {
       throw ForbiddenError("User not found");
     }
     await upsertUser({
@@ -5061,49 +5047,137 @@ async function createContext(opts) {
 
 // server/_core/oauth.ts
 import { parse as parseCookieHeader2 } from "cookie";
+
+// server/_core/githubOAuth.ts
+function buildGitHubAuthorizeUrl(input) {
+  const url = new URL("https://github.com/login/oauth/authorize");
+  url.searchParams.set("client_id", input.clientId);
+  url.searchParams.set("redirect_uri", input.redirectUri);
+  url.searchParams.set("state", input.state);
+  url.searchParams.set("scope", "read:user user:email");
+  return url.toString();
+}
+function normalizeGitHubUser(profile, emails = []) {
+  const preferredEmail = profile.email ?? emails.find((email) => email.primary && email.verified)?.email ?? emails.find((email) => email.verified)?.email ?? null;
+  return {
+    openId: `github:${profile.id}`,
+    name: profile.name?.trim() || profile.login,
+    email: preferredEmail,
+    loginMethod: "github"
+  };
+}
+
+// server/_core/oauth.ts
+var GITHUB_TOKEN_URL = "https://github.com/login/oauth/access_token";
+var GITHUB_PROFILE_URL = "https://api.github.com/user";
+var GITHUB_EMAILS_URL = "https://api.github.com/user/emails";
 function getQueryParam(req, key) {
   const value = req.query[key];
   return typeof value === "string" ? value : void 0;
 }
+function getRequestOrigin(req) {
+  const protocolHeader = req.headers["x-forwarded-proto"];
+  const hostHeader = req.headers["x-forwarded-host"];
+  const protocol = (typeof protocolHeader === "string" ? protocolHeader : req.protocol || "https").split(",")[0]?.trim();
+  const host = (typeof hostHeader === "string" ? hostHeader : req.get("host") ?? "").split(",")[0]?.trim();
+  if (!protocol || !host) return null;
+  try {
+    return new URL(`${protocol}://${host}`).origin;
+  } catch {
+    return null;
+  }
+}
+function callbackUrlFor(req) {
+  const origin = getRequestOrigin(req);
+  return origin ? `${origin}/api/oauth/callback` : null;
+}
+function hasValidStateNonce(req, state) {
+  const { nonce } = decodeOAuthState(state);
+  const expectedNonce = parseCookieHeader2(req.headers.cookie ?? "")[OAUTH_STATE_COOKIE];
+  return Boolean(nonce && nonce === expectedNonce);
+}
+function githubConfigured() {
+  return Boolean(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET);
+}
+async function exchangeGitHubCode(code, redirectUri) {
+  const body = new URLSearchParams({
+    client_id: process.env.GITHUB_CLIENT_ID ?? "",
+    client_secret: process.env.GITHUB_CLIENT_SECRET ?? "",
+    code,
+    redirect_uri: redirectUri
+  });
+  const response = await fetch(GITHUB_TOKEN_URL, {
+    method: "POST",
+    headers: { Accept: "application/json", "Content-Type": "application/x-www-form-urlencoded" },
+    body
+  });
+  if (!response.ok) throw new Error("GitHub token exchange failed");
+  const payload = await response.json();
+  if (!payload.access_token) throw new Error("GitHub token response missing access token");
+  return payload.access_token;
+}
+async function getGitHubUser(accessToken) {
+  const headers = {
+    Accept: "application/vnd.github+json",
+    Authorization: `Bearer ${accessToken}`,
+    "X-GitHub-Api-Version": "2022-11-28"
+  };
+  const profileResponse = await fetch(GITHUB_PROFILE_URL, { headers });
+  if (!profileResponse.ok) throw new Error("GitHub profile request failed");
+  const profile = await profileResponse.json();
+  const emailsResponse = await fetch(GITHUB_EMAILS_URL, { headers });
+  const emails = emailsResponse.ok ? await emailsResponse.json() : [];
+  return normalizeGitHubUser(profile, emails);
+}
 function registerOAuthRoutes(app) {
+  app.get("/api/oauth/github", (req, res) => {
+    const state = getQueryParam(req, "state");
+    const callbackUrl = callbackUrlFor(req);
+    const expectedRedirectUri = state ? decodeOAuthState(state).redirectUri : "";
+    if (!githubConfigured()) {
+      res.status(503).json({ error: "GitHub OAuth is not configured" });
+      return;
+    }
+    if (!state || !callbackUrl || expectedRedirectUri !== callbackUrl || !hasValidStateNonce(req, state)) {
+      res.status(403).json({ error: "invalid oauth state" });
+      return;
+    }
+    res.redirect(302, buildGitHubAuthorizeUrl({
+      clientId: process.env.GITHUB_CLIENT_ID ?? "",
+      redirectUri: callbackUrl,
+      state
+    }));
+  });
   app.get("/api/oauth/callback", async (req, res) => {
     const code = getQueryParam(req, "code");
     const state = getQueryParam(req, "state");
-    if (!code || !state) {
-      res.status(400).json({ error: "code and state are required" });
+    const callbackUrl = callbackUrlFor(req);
+    const expectedRedirectUri = state ? decodeOAuthState(state).redirectUri : "";
+    if (!githubConfigured()) {
+      res.status(503).json({ error: "GitHub OAuth is not configured" });
       return;
     }
-    const { nonce } = decodeOAuthState(state);
-    const expectedNonce = parseCookieHeader2(req.headers.cookie ?? "")[OAUTH_STATE_COOKIE];
-    if (!nonce || nonce !== expectedNonce) {
+    if (!code || !state || !callbackUrl || expectedRedirectUri !== callbackUrl || !hasValidStateNonce(req, state)) {
       res.status(403).json({ error: "invalid oauth state" });
       return;
     }
     res.clearCookie(OAUTH_STATE_COOKIE, { path: "/", secure: true, sameSite: "none" });
     try {
-      const tokenResponse = await sdk.exchangeCodeForToken(code, state);
-      const userInfo = await sdk.getUserInfo(tokenResponse.accessToken);
-      if (!userInfo.openId) {
-        res.status(400).json({ error: "openId missing from user info" });
-        return;
-      }
-      await upsertUser({
-        openId: userInfo.openId,
-        name: userInfo.name || null,
-        email: userInfo.email ?? null,
-        loginMethod: userInfo.loginMethod ?? userInfo.platform ?? null,
-        lastSignedIn: /* @__PURE__ */ new Date()
-      });
+      const accessToken = await exchangeGitHubCode(code, callbackUrl);
+      const userInfo = await getGitHubUser(accessToken);
+      await upsertUser({ ...userInfo, lastSignedIn: /* @__PURE__ */ new Date() });
       const sessionToken = await sdk.createSessionToken(userInfo.openId, {
-        name: userInfo.name || "",
+        name: userInfo.name,
         expiresInMs: ONE_YEAR_MS
       });
-      const cookieOptions = getSessionCookieOptions(req);
-      res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+      res.cookie(COOKIE_NAME, sessionToken, {
+        ...getSessionCookieOptions(req),
+        maxAge: ONE_YEAR_MS
+      });
       res.redirect(302, "/");
-    } catch (error) {
-      console.error("[OAuth] Callback failed", error);
-      res.status(500).json({ error: "OAuth callback failed" });
+    } catch {
+      console.warn("[OAuth] GitHub callback failed");
+      res.status(500).json({ error: "GitHub OAuth callback failed" });
     }
   });
 }
@@ -5206,7 +5280,7 @@ function createApp() {
       schemaInitialized,
       schemaTableCount,
       schemaMilestones,
-      oauthConfigured: Boolean(process.env.OAUTH_SERVER_URL && process.env.VITE_APP_ID),
+      oauthConfigured: Boolean(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET),
       storageConfigured: Boolean(process.env.BUILT_IN_FORGE_API_URL && process.env.BUILT_IN_FORGE_API_KEY)
     });
   });

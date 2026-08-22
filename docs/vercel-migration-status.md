@@ -51,3 +51,11 @@ Vercel 官方 Express 指南推荐以 `api/index` 作为单一函数入口，并
 单入口函数验证已确认 Vercel 与 TiDB 的连接和 tRPC 路径均可用。公开目录恢复在创建 `knowledge_documents` 时被 TiDB 的唯一索引字节限制阻断：原 `storageKey varchar(1024)` 在默认 UTF-8 字符集下可能超过索引上限。该列已收紧为 `varchar(768)`，仍覆盖应用生成的 `knowledge/{userId}/{timestamp}-{title}` 对象键格式；变更仅影响尚未创建的空表，不修改任何用户文件或记录。[TiDB CREATE INDEX 语法](https://docs.pingcap.com/tidb/stable/sql-statement-create-index/)
 
 单入口函数的 `/api/health` 已正常响应，但浏览器资源记录显示 `/api/trpc/catalog...` 未被单段路径模式覆盖。API rewrite 已改为 `/api/(.*)` 正则 catch-all，以覆盖 tRPC 的多层路径并保持 Express 的原始路由分派。
+
+## 2026-08-21：Vercel–TiDB 与公开目录验收通过
+
+最新 Preview（提交 `3b34d47`）的 `/api/health` 已返回 `databaseConfigured: true`、`databaseReachable: true`、`schemaInitialized: true`，并确认公开目录、条文关联、学习工具、知识库和版本对照五个 schema 阶段均为 ready。`catalog.filters` tRPC 请求返回公开目录筛选维度，`catalog.herbs` 对“桂枝”的查询返回 2 条相关药材，其中包含“桂枝”（性温，归心、肺、膀胱经）。这证明 Vercel Serverless Function、TiDB TLS、Express/tRPC 路由和公开目录幂等种子已协同工作；未创建或读取任何用户笔记、收藏、进度或上传文件。
+
+## 2026-08-22：GitHub OAuth Preview 实现就绪
+
+Preview 环境已配置 GitHub OAuth 客户端变量。应用现在通过 `/api/oauth/github` 发起授权，并由 `/api/oauth/callback` 校验一次性 CSRF state、验证回调源站、以服务器端授权码交换用户资料后创建加密会话 Cookie。身份以稳定的 `github:{numericId}` 形式写入现有用户表，私有邮箱仅在 GitHub 返回已验证邮箱时保存。浏览器端已移除 Manus sessionStorage 镜像；尚待用户在 GitHub 授权页完成一次真实授权，以核验交互回调和笔记/收藏隔离链路。
