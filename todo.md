@@ -102,10 +102,10 @@
 - [x] 审查并提交可重复执行的 TiDB schema 迁移与恢复策略，避免依赖未追踪的 Drizzle 元数据。
 - [x] 在 `tcm` 数据库完成 schema 恢复，并验证公开中药、经方和古籍查询可正常读取。
 - [x] 执行可重复的公开目录种子，核验中药详情 API 返回数据且不写入个人资料。
-- [ ] 以 GitHub OAuth 替换 Manus OAuth，保护回调状态、会话 Cookie 与登录用户隔离边界。
+- [x] 以 GitHub OAuth 替换 Manus OAuth，保护回调状态、会话 Cookie 与登录用户隔离边界。
 - [x] 实现 GitHub OAuth 授权起点、授权码交换、用户资料映射与加密会话，移除前端 Manus 会话镜像并添加回归测试。
-- [ ] 定位并修复 GitHub OAuth 授权回调的服务器端失败，验证令牌交换、资料读取、TiDB 用户写入和会话 Cookie 的完整链路。
-- [ ] 为 Preview 配置独立 `JWT_SECRET` 并增加无敏感信息的 OAuth 阶段诊断，区分 GitHub 令牌交换、资料读取、用户写入与会话签发错误。
+- [x] 定位并修复 GitHub OAuth 授权回调的服务器端失败，验证令牌交换、资料读取、TiDB 用户写入和会话 Cookie 的完整链路。
+- [x] 为 Preview 配置独立 `JWT_SECRET` 并增加无敏感信息的 OAuth 阶段诊断，区分 GitHub 令牌交换、资料读取、用户写入与会话签发错误。
 - [ ] 以 Vercel Blob 替换内置对象存储，保留知识库文件元数据与用户访问隔离。
 - [ ] 补充迁移、OAuth 与 Blob 链路测试，执行类型检查、Vitest 与预览环境核心路径验收。
 - [ ] 将验证通过的迁移提交推送到 `feat/vercel-fullstack-runtime`，不合并或覆盖 `main`。
@@ -114,3 +114,4 @@
 - [x] 修复 Vercel 上 React 单页应用的深链接回退规则，确保 `/bencao`、`/jingfang`、`/guji` 直达不再返回 404，且 `/api/*` 继续由函数处理。
 - [x] 修正 SPA 回退规则对 `/api/trpc/*` 的误拦截：保留本草等深链接访问，同时恢复 tRPC 目录查询和健康检查函数路由。
 - [x] 在前 3 批 schema 已存在的前提下补齐第 4、5 批知识库与版本对照表，并核验 schema 里程碑全部为 ready 后再触发目录种子。
+- [x] 修复 Preview GitHub OAuth 的 `incorrect_client_credentials`：确保 Client ID 与新生成的 Client Secret 来自同一 Preview OAuth App，并完成重新部署与完整登录验证。

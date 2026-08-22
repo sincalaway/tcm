@@ -63,3 +63,11 @@ Preview 环境已配置 GitHub OAuth 客户端变量。应用现在通过 `/api/
 用户补齐 `GITHUB_CLIENT_ID` 并重新部署 Preview 后，稳定 Preview 健康检查已返回 `oauthConfigured: true`，同时 TiDB 连接和完整 schema 状态保持为 true。环境变量值始终未被读取或记录；下一步只需用户在 GitHub 授权页确认登录，完成回调端到端验证。
 
 首次真实 GitHub 授权已到达 `/api/oauth/callback`，但服务器端返回 500。诊断版健康检查显示 `sessionConfigured: false`，而 OAuth 与数据库均为 true；因此当前阻塞在会话签名密钥未配置或长度不足，尚未产生持久化的用户会话。需要为 Preview 设置独立、随机且至少 32 字符的 `JWT_SECRET` 后重新部署，再重试授权。
+
+## 2026-08-22：GitHub OAuth Preview 端到端验证通过
+
+在为 Preview 配置独立 `JWT_SECRET` 后，真实授权仍在令牌交换阶段失败。安全诊断仅记录 GitHub 返回的非敏感错误类别：`incorrect_client_credentials`；未记录、读取或提交 Client ID、Client Secret、授权码或访问令牌。
+
+用户在 GitHub 的 **TCM Classics Preview** OAuth App 中确认稳定 Preview 的 Redirect URI 为 `https://tcm-git-feat-vercel-fullstack-runtime-away6.vercel.app/api/oauth/callback`，随后生成新的 Client Secret，并仅更新 Vercel `Preview` 环境中的 `GITHUB_CLIENT_SECRET`。重新部署最新 Preview 后，Vercel 运行日志记录到 `/api/oauth/callback` 的 `302` 响应，且用户确认已成功返回并登录。紧邻的一次 `403` 为更新部署后对旧会话状态的失败尝试；随后的 `302` 是当前有效登录流程的成功重定向。未创建、读取或修改笔记、收藏、学习进度或知识库文件。
+
+当前验证结论如下：GitHub OAuth 授权码交换、用户资料归一化、TiDB 用户 upsert 与会话 Cookie 签发已完成真实 Preview 登录链路验证；公开目录与既有 schema 保持不变。此验证只适用于 `feat/vercel-fullstack-runtime` 的 Preview，不涉及 `main`、Production 环境变量或生产部署。
