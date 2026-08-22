@@ -26,7 +26,7 @@ import {
 } from "../drizzle/schema";
 import { chapterSeed, classicSeed, formulaPassageSeed, formulaSeed, herbSeed, passageVersionSeed, shangHanPassageSeed, sourceSeed } from "./catalogSeed";
 import { ENV } from "./_core/env";
-import { storageGetSignedUrl, storagePut } from "./storage";
+import { deletePrivateKnowledgeBlob, putPrivateKnowledgeBlob } from "./knowledgeBlobStorage";
 import { extractText } from "unpdf";
 import { searchFormulaStudyRecords, type FormulaStudyMatchMode } from "./formulaStudySearch";
 import type { PassageLearningRecord } from "./passageLearningMatch";
@@ -753,7 +753,7 @@ export async function uploadKnowledgeDocument(userId: number, input: { fileName:
     try { const extracted = await extractText(new Uint8Array(buffer), { mergePages: true }); textContent = extracted.text.replace(/\s+/g, " ").trim() || null; } catch { textContent = null; }
   }
   if (textContent && Buffer.byteLength(textContent, "utf8") > KNOWLEDGE_MAX_TEXT_BYTES) throw new Error("文档可检索正文过长，请拆分后上传");
-  const { key, url } = await storagePut(`knowledge/${userId}/${Date.now()}-${title}`, buffer, input.mimeType);
+  const { key, url } = await putPrivateKnowledgeBlob(`knowledge/${userId}/${Date.now()}-${title}`, buffer, input.mimeType);
   const textPreview = textContent?.slice(0, 6000) || null;
   const result = await db.insert(knowledgeDocuments).values({ userId, title, mimeType: input.mimeType, sizeBytes: buffer.length, storageKey: key, storageUrl: url, textPreview, textContent });
   return { id: Number(result[0].insertId), title, mimeType: input.mimeType, sizeBytes: buffer.length };
@@ -798,14 +798,21 @@ export async function getKnowledgeDocumentCitations(userId: number, documentIds:
 
 export async function getKnowledgeDocumentDownload(userId: number, id: number) {
   const db = await getDb(); if (!db) throw new Error("数据库暂不可用");
-  const row = (await db.select({ id: knowledgeDocuments.id, title: knowledgeDocuments.title, storageKey: knowledgeDocuments.storageKey }).from(knowledgeDocuments).where(and(eq(knowledgeDocuments.id, id), eq(knowledgeDocuments.userId, userId))).limit(1))[0];
+  const row = (await db.select({ id: knowledgeDocuments.id, title: knowledgeDocuments.title }).from(knowledgeDocuments).where(and(eq(knowledgeDocuments.id, id), eq(knowledgeDocuments.userId, userId))).limit(1))[0];
   if (!row) throw new Error("文档不存在或无权访问");
-  return { id: row.id, title: row.title, storageUrl: await storageGetSignedUrl(row.storageKey) };
+  return { id: row.id, title: row.title, storageUrl: `/api/knowledge/${row.id}/file` };
+}
+
+export async function getKnowledgeDocumentBlobForUser(userId: number, id: number) {
+  const db = await getDb(); if (!db) throw new Error("数据库暂不可用");
+  return (await db.select({ id: knowledgeDocuments.id, title: knowledgeDocuments.title, mimeType: knowledgeDocuments.mimeType, storageKey: knowledgeDocuments.storageKey }).from(knowledgeDocuments).where(and(eq(knowledgeDocuments.id, id), eq(knowledgeDocuments.userId, userId))).limit(1))[0];
 }
 
 export async function deleteKnowledgeDocument(userId: number, id: number) {
   const db = await getDb(); if (!db) throw new Error("数据库暂不可用");
-  // 存储层不暴露删除端点；移除用户专属 key 和所有 UI 引用后，对象不再可寻址。
+  const row = await getKnowledgeDocumentBlobForUser(userId, id);
+  if (!row) return { success: true };
+  await deletePrivateKnowledgeBlob(row.storageKey);
   await db.delete(knowledgeDocuments).where(and(eq(knowledgeDocuments.id, id), eq(knowledgeDocuments.userId, userId)));
   return { success: true };
 }

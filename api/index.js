@@ -1,5 +1,6 @@
 // server/_core/app.ts
 import express from "express";
+import { Readable } from "node:stream";
 import { sql as sql2 } from "drizzle-orm";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 
@@ -3013,65 +3014,44 @@ var ENV = {
   networkLlmApiKey: process.env.NETWORK_LLM_API_KEY ?? ""
 };
 
-// server/storage.ts
-function getForgeConfig() {
-  const forgeUrl = ENV.forgeApiUrl;
-  const forgeKey = ENV.forgeApiKey;
-  if (!forgeUrl || !forgeKey) {
-    throw new Error(
-      "Storage config missing: set BUILT_IN_FORGE_API_URL and BUILT_IN_FORGE_API_KEY"
-    );
+// server/knowledgeBlobStorage.ts
+import { del, get, put } from "@vercel/blob";
+function normalizeKey(key) {
+  return key.replace(/^\/+/, "");
+}
+function assertBlobConfigured() {
+  const hasOidc = Boolean(process.env.BLOB_STORE_ID && process.env.VERCEL_OIDC_TOKEN);
+  const hasReadWriteToken = Boolean(process.env.BLOB_READ_WRITE_TOKEN);
+  if (!hasOidc && !hasReadWriteToken) {
+    throw new Error("\u77E5\u8BC6\u5E93\u79C1\u6709\u5B58\u50A8\u6682\u672A\u914D\u7F6E\uFF0C\u8BF7\u7A0D\u540E\u91CD\u8BD5\u3002");
   }
-  return { forgeUrl: forgeUrl.replace(/\/+$/, ""), forgeKey };
 }
-function normalizeKey(relKey) {
-  return relKey.replace(/^\/+/, "");
-}
-function appendHashSuffix(relKey) {
-  const hash = crypto.randomUUID().replace(/-/g, "").slice(0, 8);
-  const lastDot = relKey.lastIndexOf(".");
-  if (lastDot === -1) return `${relKey}_${hash}`;
-  return `${relKey.slice(0, lastDot)}_${hash}${relKey.slice(lastDot)}`;
-}
-async function storagePut(relKey, data, contentType = "application/octet-stream") {
-  const { forgeUrl, forgeKey } = getForgeConfig();
-  const key = appendHashSuffix(normalizeKey(relKey));
-  const presignUrl = new URL("v1/storage/presign/put", forgeUrl + "/");
-  presignUrl.searchParams.set("path", key);
-  const presignResp = await fetch(presignUrl, {
-    headers: { Authorization: `Bearer ${forgeKey}` }
+async function putPrivateKnowledgeBlob(key, data, contentType) {
+  assertBlobConfigured();
+  const body = typeof data === "string" || Buffer.isBuffer(data) ? data : Buffer.from(data);
+  const blob = await put(normalizeKey(key), body, {
+    access: "private",
+    addRandomSuffix: true,
+    contentType,
+    cacheControlMaxAge: 60
   });
-  if (!presignResp.ok) {
-    const msg = await presignResp.text().catch(() => presignResp.statusText);
-    throw new Error(`Storage presign failed (${presignResp.status}): ${msg}`);
-  }
-  const { url: s3Url } = await presignResp.json();
-  if (!s3Url) throw new Error("Forge returned empty presign URL");
-  const blob = typeof data === "string" ? new Blob([data], { type: contentType }) : new Blob([data], { type: contentType });
-  const uploadResp = await fetch(s3Url, {
-    method: "PUT",
-    headers: { "Content-Type": contentType },
-    body: blob
-  });
-  if (!uploadResp.ok) {
-    throw new Error(`Storage upload to S3 failed (${uploadResp.status})`);
-  }
-  return { key, url: `/manus-storage/${key}` };
+  return { key: blob.pathname, url: blob.url };
 }
-async function storageGetSignedUrl(relKey) {
-  const { forgeUrl, forgeKey } = getForgeConfig();
-  const key = normalizeKey(relKey);
-  const getUrl = new URL("v1/storage/presign/get", forgeUrl + "/");
-  getUrl.searchParams.set("path", key);
-  const resp = await fetch(getUrl, {
-    headers: { Authorization: `Bearer ${forgeKey}` }
+async function getPrivateKnowledgeBlob(key, ifNoneMatch) {
+  assertBlobConfigured();
+  return get(normalizeKey(key), {
+    access: "private",
+    ifNoneMatch
   });
-  if (!resp.ok) {
-    const msg = await resp.text().catch(() => resp.statusText);
-    throw new Error(`Storage signed URL failed (${resp.status}): ${msg}`);
-  }
-  const { url } = await resp.json();
-  return url;
+}
+async function deletePrivateKnowledgeBlob(key) {
+  assertBlobConfigured();
+  await del(normalizeKey(key));
+}
+function isKnowledgeBlobConfigured() {
+  return Boolean(
+    process.env.BLOB_READ_WRITE_TOKEN || process.env.BLOB_STORE_ID && process.env.VERCEL_OIDC_TOKEN
+  );
 }
 
 // server/db.ts
@@ -3807,7 +3787,7 @@ async function uploadKnowledgeDocument(userId, input) {
     }
   }
   if (textContent && Buffer.byteLength(textContent, "utf8") > KNOWLEDGE_MAX_TEXT_BYTES) throw new Error("\u6587\u6863\u53EF\u68C0\u7D22\u6B63\u6587\u8FC7\u957F\uFF0C\u8BF7\u62C6\u5206\u540E\u4E0A\u4F20");
-  const { key, url } = await storagePut(`knowledge/${userId}/${Date.now()}-${title}`, buffer, input.mimeType);
+  const { key, url } = await putPrivateKnowledgeBlob(`knowledge/${userId}/${Date.now()}-${title}`, buffer, input.mimeType);
   const textPreview = textContent?.slice(0, 6e3) || null;
   const result = await db.insert(knowledgeDocuments).values({ userId, title, mimeType: input.mimeType, sizeBytes: buffer.length, storageKey: key, storageUrl: url, textPreview, textContent });
   return { id: Number(result[0].insertId), title, mimeType: input.mimeType, sizeBytes: buffer.length };
@@ -3852,13 +3832,21 @@ async function getKnowledgeDocumentCitations(userId, documentIds) {
 async function getKnowledgeDocumentDownload(userId, id) {
   const db = await getDb();
   if (!db) throw new Error("\u6570\u636E\u5E93\u6682\u4E0D\u53EF\u7528");
-  const row2 = (await db.select({ id: knowledgeDocuments.id, title: knowledgeDocuments.title, storageKey: knowledgeDocuments.storageKey }).from(knowledgeDocuments).where(and(eq(knowledgeDocuments.id, id), eq(knowledgeDocuments.userId, userId))).limit(1))[0];
+  const row2 = (await db.select({ id: knowledgeDocuments.id, title: knowledgeDocuments.title }).from(knowledgeDocuments).where(and(eq(knowledgeDocuments.id, id), eq(knowledgeDocuments.userId, userId))).limit(1))[0];
   if (!row2) throw new Error("\u6587\u6863\u4E0D\u5B58\u5728\u6216\u65E0\u6743\u8BBF\u95EE");
-  return { id: row2.id, title: row2.title, storageUrl: await storageGetSignedUrl(row2.storageKey) };
+  return { id: row2.id, title: row2.title, storageUrl: `/api/knowledge/${row2.id}/file` };
+}
+async function getKnowledgeDocumentBlobForUser(userId, id) {
+  const db = await getDb();
+  if (!db) throw new Error("\u6570\u636E\u5E93\u6682\u4E0D\u53EF\u7528");
+  return (await db.select({ id: knowledgeDocuments.id, title: knowledgeDocuments.title, mimeType: knowledgeDocuments.mimeType, storageKey: knowledgeDocuments.storageKey }).from(knowledgeDocuments).where(and(eq(knowledgeDocuments.id, id), eq(knowledgeDocuments.userId, userId))).limit(1))[0];
 }
 async function deleteKnowledgeDocument(userId, id) {
   const db = await getDb();
   if (!db) throw new Error("\u6570\u636E\u5E93\u6682\u4E0D\u53EF\u7528");
+  const row2 = await getKnowledgeDocumentBlobForUser(userId, id);
+  if (!row2) return { success: true };
+  await deletePrivateKnowledgeBlob(row2.storageKey);
   await db.delete(knowledgeDocuments).where(and(eq(knowledgeDocuments.id, id), eq(knowledgeDocuments.userId, userId)));
   return { success: true };
 }
@@ -5291,11 +5279,37 @@ function createApp() {
       schemaMilestones,
       oauthConfigured: Boolean(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET),
       sessionConfigured: Boolean(process.env.JWT_SECRET && process.env.JWT_SECRET.length >= 32),
-      storageConfigured: Boolean(process.env.BUILT_IN_FORGE_API_URL && process.env.BUILT_IN_FORGE_API_KEY)
+      storageConfigured: isKnowledgeBlobConfigured()
     });
   });
   registerStorageProxy(app);
   registerOAuthRoutes(app);
+  app.get("/api/knowledge/:id/file", async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isSafeInteger(id) || id < 1) return res.status(400).json({ error: "Invalid document id" });
+    const user = await sdk.authenticateRequest(req).catch(() => null);
+    if (!user) return res.status(401).json({ error: "Please login" });
+    try {
+      const document = await getKnowledgeDocumentBlobForUser(user.id, id);
+      if (!document) return res.status(404).json({ error: "Document not found" });
+      const result = await getPrivateKnowledgeBlob(document.storageKey, req.header("if-none-match") ?? void 0);
+      if (!result) return res.status(404).json({ error: "Document not found" });
+      if (result.statusCode === 304) {
+        return res.status(304).set({ ETag: result.blob.etag, "Cache-Control": "private, no-cache" }).end();
+      }
+      res.status(200).set({
+        "Content-Type": result.blob.contentType || document.mimeType,
+        "Content-Disposition": result.blob.contentDisposition,
+        "X-Content-Type-Options": "nosniff",
+        ETag: result.blob.etag,
+        "Cache-Control": "private, no-cache"
+      });
+      return Readable.fromWeb(result.stream).pipe(res);
+    } catch (error) {
+      console.warn("[Knowledge Blob] Failed to serve private document", { documentId: id });
+      return res.status(502).json({ error: "Document temporarily unavailable" });
+    }
+  });
   app.post("/api/scheduled/review-reminders", handleReviewReminderSchedule);
   app.use(
     "/api/trpc",

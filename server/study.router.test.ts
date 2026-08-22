@@ -138,7 +138,7 @@ describe("study router", () => {
   });
 
   it("keeps knowledge uploads, full-text search, download links and deletion inside the authenticated user scope", async () => {
-    dbMock.uploadKnowledgeDocument.mockResolvedValue({ id: 9, title: "太阳病笔记.md" }); dbMock.listKnowledgeDocuments.mockResolvedValue([]); dbMock.searchKnowledgeDocuments.mockResolvedValue([]); dbMock.getKnowledgeDocumentDownload.mockResolvedValue({ id: 9, storageUrl: "/manus-storage/private" }); dbMock.deleteKnowledgeDocument.mockResolvedValue({ success: true });
+    dbMock.uploadKnowledgeDocument.mockResolvedValue({ id: 9, title: "太阳病笔记.md" }); dbMock.listKnowledgeDocuments.mockResolvedValue([]); dbMock.searchKnowledgeDocuments.mockResolvedValue([]); dbMock.getKnowledgeDocumentDownload.mockResolvedValue({ id: 9, storageUrl: "/api/knowledge/9/file" }); dbMock.deleteKnowledgeDocument.mockResolvedValue({ success: true });
     const caller = appRouter.createCaller(createContext());
     await caller.study.knowledge.upload({ fileName: "太阳病笔记.md", mimeType: "text/markdown", base64: "dGVzdA==" }); await caller.study.knowledge.list({ query: "太阳" }); await caller.study.knowledge.search({ query: "太阳" }); await caller.study.knowledge.download({ id: 9 }); await caller.study.knowledge.delete({ id: 9 });
     expect(dbMock.uploadKnowledgeDocument).toHaveBeenCalledWith(42, expect.objectContaining({ fileName: "太阳病笔记.md" }));
