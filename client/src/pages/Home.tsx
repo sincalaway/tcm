@@ -10,9 +10,11 @@ import { classics, formulas, herbs } from "@/data/tcmContent";
 import { IndexCta, InkStamp, RuleLabel } from "@/components/StudyElements";
 import { trpc } from "@/lib/trpc";
 
-const heroImage = "/manus-storage/tcm-hero-song-printing_db65d154.png";
-const botanicPlate = "/manus-storage/tcm-herb-botanical-plate_fe9e072d.png";
-const manuscriptImage = "/manus-storage/tcm-classics-manuscript_7ac13543.png";
+// These visuals are compiled from client/public into Vercel's static output.
+// Manus-internal /manus-storage paths are intentionally not used in this repository.
+const heroImage = "/images/tcm-hero-song-study.webp";
+const botanicPlate = "/images/tcm-hero-song-study.webp";
+const manuscriptImage = "/images/tcm-hero-song-study.webp";
 
 const learningTrails = [
   { slug: "gui-zhi-ying-wei", number: "一", title: "桂枝 · 营卫线", description: "从桂枝本草条目出发，读桂枝汤的药味结构，再回到《伤寒论》原文。", steps: [{ label: "查桂枝", href: "/bencao?q=桂枝" }, { label: "读桂枝汤", href: "/jingfang?q=桂枝汤" }, { label: "对《伤寒论》", href: "/guji?q=伤寒论&chapter=辨太阳病脉证并治" }] },

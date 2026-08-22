@@ -111,6 +111,7 @@
 - [x] 将验证通过的迁移提交推送到 `feat/vercel-fullstack-runtime`，不合并或覆盖 `main`。
 - [x] 修复 Preview Private Blob 上传提示“私有存储暂未配置”：核对项目连接生成的运行时凭据并恢复受保护上传链路，不影响 Production。
 - [x] 编写并提交完整 Vercel 部署手册，覆盖 Preview、Production、TiDB、GitHub OAuth、Private Blob、验证、回滚与凭据安全边界。
+- [ ] 修复 Preview 首页“宋刻书斋”主视觉图片加载失败，并验证部署后不出现破损图片占位符。
 - [ ] 修复 Preview 环境中部分执行的 TiDB schema：先确认两张已创建表均为空，再以幂等 SQL 补齐其余迁移表与 Drizzle 迁移记录。
 - [ ] 在 schema 完整后触发并核验公开目录幂等种子，确认中药详情、经方与古籍查询均可读取且不产生个人数据。
 - [x] 修复 Vercel 上 React 单页应用的深链接回退规则，确保 `/bencao`、`/jingfang`、`/guji` 直达不再返回 404，且 `/api/*` 继续由函数处理。
