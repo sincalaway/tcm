@@ -85,3 +85,9 @@ Preview 环境已配置 GitHub OAuth 客户端变量。应用现在通过 `/api/
 首次实际上传在对象写入前返回“知识库私有存储暂未配置”。原因是初始实现错误地只在 `process.env` 中检查 `VERCEL_OIDC_TOKEN`；Vercel Function 的运行时 OIDC 令牌实际位于每个请求的 `x-vercel-oidc-token` 请求头。提交 `ba54ed2` 将该短期令牌仅在服务器端从 tRPC/Express 请求传给 Blob SDK，并与 `BLOB_STORE_ID` 配对；令牌不返回客户端、不写入数据库、不写入日志，也不提交到仓库。
 
 修复版 Preview 部署成功后，用户在自己的登录会话内重新上传一份知识库文件，`/api/trpc/study.knowledge.upload` 返回 HTTP 200；随后通过同源受保护下载路由成功打开原文件。文件名称、正文、Blob URL/ID 与其他内容均未被读取或记录，且未执行删除操作。此结果验证了 Preview 环境中的 GitHub 会话、TiDB 元数据写入、Private Blob 写入以及经所有权校验的下载链路；Production 与 `main` 仍未改动。
+
+## 2026-08-22：Preview 首页静态主视觉修复
+
+首页原先引用的 `/manus-storage/...` 图片路径属于 Manus 站内资源路由；在 Vercel Preview 域名下该路径会落入部署保护登录页，因而浏览器显示破损图片占位符。提交 `9ee1cec` 将首页视觉替换为 Vite 从 `client/public/images/` 复制进 `dist/public/images/` 的 WebP 静态资源；提交 `4bc54e6` 进一步移除了页眉遗留的 Manus 图标依赖，改为内联草叶矢量标记。
+
+最终 Preview 直接访问 `/images/tcm-hero-song-study.webp` 返回 `1200×1600` 图像，首页实测主视觉正常显示，页眉不再存在破损图标。新增静态资源回归测试确保首页壳层不再包含 `/manus-storage/` 引用；图片相关测试、TypeScript 检查与 Vercel 构建通过。本次仅变更 `feat/vercel-fullstack-runtime`，未修改 `main` 或 Production。
