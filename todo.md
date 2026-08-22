@@ -106,9 +106,9 @@
 - [x] 实现 GitHub OAuth 授权起点、授权码交换、用户资料映射与加密会话，移除前端 Manus 会话镜像并添加回归测试。
 - [x] 定位并修复 GitHub OAuth 授权回调的服务器端失败，验证令牌交换、资料读取、TiDB 用户写入和会话 Cookie 的完整链路。
 - [x] 为 Preview 配置独立 `JWT_SECRET` 并增加无敏感信息的 OAuth 阶段诊断，区分 GitHub 令牌交换、资料读取、用户写入与会话签发错误。
-- [ ] 以 Vercel Blob 替换内置对象存储，保留知识库文件元数据与用户访问隔离。
-- [ ] 补充迁移、OAuth 与 Blob 链路测试，执行类型检查、Vitest 与预览环境核心路径验收。
-- [ ] 将验证通过的迁移提交推送到 `feat/vercel-fullstack-runtime`，不合并或覆盖 `main`。
+- [x] 以 Vercel Blob 替换内置对象存储，保留知识库文件元数据与用户访问隔离。
+- [x] 补充迁移、OAuth 与 Blob 链路测试，执行类型检查、Vitest 与预览环境核心路径验收。
+- [x] 将验证通过的迁移提交推送到 `feat/vercel-fullstack-runtime`，不合并或覆盖 `main`。
 - [ ] 修复 Preview 环境中部分执行的 TiDB schema：先确认两张已创建表均为空，再以幂等 SQL 补齐其余迁移表与 Drizzle 迁移记录。
 - [ ] 在 schema 完整后触发并核验公开目录幂等种子，确认中药详情、经方与古籍查询均可读取且不产生个人数据。
 - [x] 修复 Vercel 上 React 单页应用的深链接回退规则，确保 `/bencao`、`/jingfang`、`/guji` 直达不再返回 404，且 `/api/*` 继续由函数处理。

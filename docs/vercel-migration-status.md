@@ -71,3 +71,11 @@ Preview 环境已配置 GitHub OAuth 客户端变量。应用现在通过 `/api/
 用户在 GitHub 的 **TCM Classics Preview** OAuth App 中确认稳定 Preview 的 Redirect URI 为 `https://tcm-git-feat-vercel-fullstack-runtime-away6.vercel.app/api/oauth/callback`，随后生成新的 Client Secret，并仅更新 Vercel `Preview` 环境中的 `GITHUB_CLIENT_SECRET`。重新部署最新 Preview 后，Vercel 运行日志记录到 `/api/oauth/callback` 的 `302` 响应，且用户确认已成功返回并登录。紧邻的一次 `403` 为更新部署后对旧会话状态的失败尝试；随后的 `302` 是当前有效登录流程的成功重定向。未创建、读取或修改笔记、收藏、学习进度或知识库文件。
 
 当前验证结论如下：GitHub OAuth 授权码交换、用户资料归一化、TiDB 用户 upsert 与会话 Cookie 签发已完成真实 Preview 登录链路验证；公开目录与既有 schema 保持不变。此验证只适用于 `feat/vercel-fullstack-runtime` 的 Preview，不涉及 `main`、Production 环境变量或生产部署。
+
+## 2026-08-22：Preview 私有 Vercel Blob 知识库迁移
+
+已创建名为 `tcm-knowledge-preview` 的 **Private** Vercel Blob Store（IAD1），并在 Store 的 Projects 连接中将 `tcm` 项目的环境范围由默认的 `Production, Preview` 调整为仅 **Preview**。连接使用 Vercel OIDC 运行时认证，不在项目中写入、读取或提交长期 Blob 读写令牌；控制台只显示 `BLOB_STORE_ID` 与 webhook 公钥的非敏感变量名。
+
+提交 `b792e19` 已将知识库上传从 Manus Forge S3 封装切换为 `@vercel/blob` 私有写入：对象路径继续以 `knowledge/{userId}/` 分区，并以随机后缀避免冲突；TiDB 仅保留 Blob pathname、URL、文件元数据和可检索正文。下载不再返回对象直链，而是使用 `/api/knowledge/:id/file`：该路由先验证 GitHub 会话，再以当前用户 ID 查询文档所有权，随后从 Private Blob 流式读取，并设置 `X-Content-Type-Options: nosniff` 与 `Cache-Control: private, no-cache`。删除操作在成功删除同一私有 Blob 对象后才移除当前用户的 TiDB 元数据。
+
+该提交的 Vercel Preview 部署已成功完成。新增 3 项私有 Blob 回归测试，连同既有测试共 **16 个测试文件、52 项测试**通过；TypeScript 检查与 Vercel 构建通过。为保护真实个人资料，本阶段未上传、读取或删除任何用户文件；私有读写与所有权隔离由路由实现和自动化测试验证。
