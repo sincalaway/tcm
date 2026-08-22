@@ -79,3 +79,9 @@ Preview 环境已配置 GitHub OAuth 客户端变量。应用现在通过 `/api/
 提交 `b792e19` 已将知识库上传从 Manus Forge S3 封装切换为 `@vercel/blob` 私有写入：对象路径继续以 `knowledge/{userId}/` 分区，并以随机后缀避免冲突；TiDB 仅保留 Blob pathname、URL、文件元数据和可检索正文。下载不再返回对象直链，而是使用 `/api/knowledge/:id/file`：该路由先验证 GitHub 会话，再以当前用户 ID 查询文档所有权，随后从 Private Blob 流式读取，并设置 `X-Content-Type-Options: nosniff` 与 `Cache-Control: private, no-cache`。删除操作在成功删除同一私有 Blob 对象后才移除当前用户的 TiDB 元数据。
 
 该提交的 Vercel Preview 部署已成功完成。新增 3 项私有 Blob 回归测试，连同既有测试共 **16 个测试文件、52 项测试**通过；TypeScript 检查与 Vercel 构建通过。为保护真实个人资料，本阶段未上传、读取或删除任何用户文件；私有读写与所有权隔离由路由实现和自动化测试验证。
+
+## 2026-08-22：Private Blob 运行时 OIDC 修复与实际验收
+
+首次实际上传在对象写入前返回“知识库私有存储暂未配置”。原因是初始实现错误地只在 `process.env` 中检查 `VERCEL_OIDC_TOKEN`；Vercel Function 的运行时 OIDC 令牌实际位于每个请求的 `x-vercel-oidc-token` 请求头。提交 `ba54ed2` 将该短期令牌仅在服务器端从 tRPC/Express 请求传给 Blob SDK，并与 `BLOB_STORE_ID` 配对；令牌不返回客户端、不写入数据库、不写入日志，也不提交到仓库。
+
+修复版 Preview 部署成功后，用户在自己的登录会话内重新上传一份知识库文件，`/api/trpc/study.knowledge.upload` 返回 HTTP 200；随后通过同源受保护下载路由成功打开原文件。文件名称、正文、Blob URL/ID 与其他内容均未被读取或记录，且未执行删除操作。此结果验证了 Preview 环境中的 GitHub 会话、TiDB 元数据写入、Private Blob 写入以及经所有权校验的下载链路；Production 与 `main` 仍未改动。
