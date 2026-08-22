@@ -5162,21 +5162,26 @@ function registerOAuthRoutes(app) {
       return;
     }
     res.clearCookie(OAUTH_STATE_COOKIE, { path: "/", secure: true, sameSite: "none" });
+    let stage = "token exchange";
     try {
       const accessToken = await exchangeGitHubCode(code, callbackUrl);
+      stage = "profile retrieval";
       const userInfo = await getGitHubUser(accessToken);
+      stage = "user persistence";
       await upsertUser({ ...userInfo, lastSignedIn: /* @__PURE__ */ new Date() });
+      stage = "session signing";
       const sessionToken = await sdk.createSessionToken(userInfo.openId, {
         name: userInfo.name,
         expiresInMs: ONE_YEAR_MS
       });
+      stage = "session cookie";
       res.cookie(COOKIE_NAME, sessionToken, {
         ...getSessionCookieOptions(req),
         maxAge: ONE_YEAR_MS
       });
       res.redirect(302, "/");
     } catch {
-      console.warn("[OAuth] GitHub callback failed");
+      console.warn(`[OAuth] GitHub callback failed at ${stage}`);
       res.status(500).json({ error: "GitHub OAuth callback failed" });
     }
   });
@@ -5281,6 +5286,7 @@ function createApp() {
       schemaTableCount,
       schemaMilestones,
       oauthConfigured: Boolean(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET),
+      sessionConfigured: Boolean(process.env.JWT_SECRET && process.env.JWT_SECRET.length >= 32),
       storageConfigured: Boolean(process.env.BUILT_IN_FORGE_API_URL && process.env.BUILT_IN_FORGE_API_KEY)
     });
   });

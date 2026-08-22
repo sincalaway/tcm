@@ -104,6 +104,8 @@
 - [x] 执行可重复的公开目录种子，核验中药详情 API 返回数据且不写入个人资料。
 - [ ] 以 GitHub OAuth 替换 Manus OAuth，保护回调状态、会话 Cookie 与登录用户隔离边界。
 - [x] 实现 GitHub OAuth 授权起点、授权码交换、用户资料映射与加密会话，移除前端 Manus 会话镜像并添加回归测试。
+- [ ] 定位并修复 GitHub OAuth 授权回调的服务器端失败，验证令牌交换、资料读取、TiDB 用户写入和会话 Cookie 的完整链路。
+- [ ] 为 Preview 配置独立 `JWT_SECRET` 并增加无敏感信息的 OAuth 阶段诊断，区分 GitHub 令牌交换、资料读取、用户写入与会话签发错误。
 - [ ] 以 Vercel Blob 替换内置对象存储，保留知识库文件元数据与用户访问隔离。
 - [ ] 补充迁移、OAuth 与 Blob 链路测试，执行类型检查、Vitest 与预览环境核心路径验收。
 - [ ] 将验证通过的迁移提交推送到 `feat/vercel-fullstack-runtime`，不合并或覆盖 `main`。
